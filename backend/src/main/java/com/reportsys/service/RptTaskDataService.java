@@ -190,10 +190,10 @@ public class RptTaskDataService {
             }
         }
 
-        // 更新任务审核状态
+        // 更新任务审核状态 (auditStatus为计算字段不存DB，此处做空保护)
         RptTask task = rptTaskMapper.selectById(taskData.getTaskId());
-        if (task != null && task.getAuditStatus() == 0) {
-            task.setAuditStatus(1); // 审核中
+        if (task != null && task.getAuditStatus() != null && task.getAuditStatus() == 0) {
+            task.setAuditStatus(1);
             task.setUpdateTime(LocalDateTime.now());
             rptTaskMapper.updateById(task);
         }

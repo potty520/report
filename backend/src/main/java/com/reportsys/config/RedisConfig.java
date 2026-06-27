@@ -12,8 +12,8 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
 
-@Configuration
-@EnableCaching
+//@Configuration  // Redis not available, disabled
+//@EnableCaching
 public class RedisConfig {
 
     @Bean
