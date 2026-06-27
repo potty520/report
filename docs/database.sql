@@ -68,6 +68,8 @@ CREATE TABLE sys_menu (
     menu_code   VARCHAR(64)   DEFAULT '' COMMENT '菜单编码(权限标识)',
     menu_type   CHAR(1)       DEFAULT 'M' COMMENT '类型 (M=目录 C=菜单 B=按钮)',
     path        VARCHAR(128)  DEFAULT '' COMMENT '前端路由路径',
+    component   VARCHAR(200)  DEFAULT NULL COMMENT '组件路径',
+    permission  VARCHAR(100)  DEFAULT NULL COMMENT '权限标识',
     icon        VARCHAR(64)   DEFAULT '' COMMENT '图标',
     sort        INT           DEFAULT 0  COMMENT '排序',
     status      TINYINT       DEFAULT 1  COMMENT '状态 (1=启用 0=停用)',
@@ -102,6 +104,9 @@ CREATE TABLE sys_login_log (
     user_id     BIGINT        DEFAULT NULL COMMENT '用户ID',
     username    VARCHAR(32)   DEFAULT '' COMMENT '用户名',
     ip          VARCHAR(64)   DEFAULT '' COMMENT '登录IP',
+    location    VARCHAR(100)  DEFAULT NULL COMMENT '登录地点',
+    browser     VARCHAR(200)  DEFAULT NULL COMMENT '浏览器',
+    os          VARCHAR(100)  DEFAULT NULL COMMENT '操作系统',
     login_time  DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '登录时间',
     status      TINYINT       DEFAULT 1  COMMENT '状态 (1=成功 0=失败)',
     msg         VARCHAR(256)  DEFAULT '' COMMENT '消息',
@@ -313,34 +318,34 @@ INSERT INTO sys_user_role (user_id, role_id) VALUES
 (4, 4);
 
 -- 初始化菜单 (完整的系统菜单树)
-INSERT INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, icon, sort) VALUES
+INSERT INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, permission, icon, sort) VALUES
 -- 一级菜单
-(1,  0,  '填报总览',   'overview',        'C', '/overview',        'DashboardOutlined',    1),
-(2,  0,  '系统管理',   'system',          'M', '/system',          'SettingOutlined',      9),
-(3,  0,  '组织架构',   'org',             'M', '/org',             'ApartmentOutlined',    8),
-(4,  0,  '模板管理',   'template',        'C', '/template/list',   'FileExcelOutlined',    2),
-(5,  0,  '数据源管理', 'datasource',      'C', '/datasource/list', 'DatabaseOutlined',     3),
-(6,  0,  '任务管理',   'task',            'M', '/task',            'ScheduleOutlined',     4),
-(7,  0,  '填报管理',   'fill',            'M', '/fill',            'FormOutlined',         5),
-(8,  0,  '数据申请',   'dataApply',       'M', '/dataApply',       'ImportOutlined',       6),
+(1,  0,  '填报总览',   'overview',        'C', '/overview',        'pages/Overview',      'overview:view',       'DashboardOutlined',    1),
+(2,  0,  '系统管理',   'system',          'M', '/system',          NULL,                   NULL,                  'SettingOutlined',      9),
+(3,  0,  '组织架构',   'org',             'M', '/org',             NULL,                   NULL,                  'ApartmentOutlined',    8),
+(4,  0,  '模板管理',   'template',        'C', '/template/list',   'pages/Template/List', 'template:view',       'FileExcelOutlined',    2),
+(5,  0,  '数据源管理', 'datasource',      'C', '/datasource/list', 'pages/Datasource/List','datasource:view',     'DatabaseOutlined',     3),
+(6,  0,  '任务管理',   'task',            'M', '/task',            NULL,                   NULL,                  'ScheduleOutlined',     4),
+(7,  0,  '填报管理',   'fill',            'M', '/fill',            NULL,                   NULL,                  'FormOutlined',         5),
+(8,  0,  '数据申请',   'dataApply',       'M', '/dataApply',       NULL,                   NULL,                  'ImportOutlined',       6),
 -- 系统管理子菜单
-(21, 2,  '用户管理',   'system:user',     'C', '/system/user',     'UserOutlined',         1),
-(22, 2,  '角色管理',   'system:role',     'C', '/system/role',     'TeamOutlined',         2),
-(23, 2,  '菜单管理',   'system:menu',     'C', '/system/menu',     'MenuOutlined',         3),
-(24, 2,  '登录日志',   'system:log',      'C', '/system/log',      'FileTextOutlined',     4),
+(21, 2,  '用户管理',   'system:user',     'C', '/system/user',     'pages/System/User',   'system:user:view',    'UserOutlined',         1),
+(22, 2,  '角色管理',   'system:role',     'C', '/system/role',     'pages/System/Role',   'system:role:view',    'TeamOutlined',         2),
+(23, 2,  '菜单管理',   'system:menu',     'C', '/system/menu',     'pages/System/Menu',   'system:menu:view',    'MenuOutlined',         3),
+(24, 2,  '登录日志',   'system:log',      'C', '/system/log',      'pages/System/Log',    'system:log:view',     'FileTextOutlined',     4),
 -- 组织架构子菜单
-(31, 3,  '部门管理',   'org:dept',        'C', '/org/dept',        'ClusterOutlined',      1),
-(32, 3,  '项目管理',   'org:project',     'C', '/org/project',     'ProjectOutlined',      2),
+(31, 3,  '部门管理',   'org:dept',        'C', '/org/dept',        'pages/Org/Dept',      'org:dept:view',       'ClusterOutlined',      1),
+(32, 3,  '项目管理',   'org:project',     'C', '/org/project',     'pages/Org/Project',   'org:project:view',    'ProjectOutlined',      2),
 -- 任务管理子菜单
-(61, 6,  '任务制定',   'task:formulation','C', '/task/formulation','EditOutlined',         1),
-(62, 6,  '任务分派',   'task:assign',     'C', '/task/assign',     'SendOutlined',         2),
-(63, 6,  '任务台账',   'task:ledger',     'C', '/task/ledger',     'BookOutlined',         3),
+(61, 6,  '任务制定',   'task:formulation','C', '/task/formulation','pages/Task/Formulation','task:formulation:view','EditOutlined',       1),
+(62, 6,  '任务分派',   'task:assign',     'C', '/task/assign',     'pages/Task/Assign',   'task:assign:view',    'SendOutlined',         2),
+(63, 6,  '任务台账',   'task:ledger',     'C', '/task/ledger',     'pages/Task/Ledger',   'task:ledger:view',    'BookOutlined',         3),
 -- 填报管理子菜单
-(71, 7,  '数据填报',   'fill:task',       'C', '/fill/task',       'FormOutlined',         1),
-(72, 7,  '填报审核',   'fill:audit',      'C', '/fill/audit',      'CheckSquareOutlined',  2),
+(71, 7,  '数据填报',   'fill:task',       'C', '/fill/task',       'pages/Fill/Task',     'fill:task:view',      'FormOutlined',         1),
+(72, 7,  '填报审核',   'fill:audit',      'C', '/fill/audit',      'pages/Fill/Audit',    'fill:audit:view',     'CheckSquareOutlined',  2),
 -- 数据申请子菜单
-(81, 8,  '数据申请',   'dataApply:apply', 'C', '/dataApply/apply', 'FileAddOutlined',      1),
-(82, 8,  '申请审批',   'dataApply:approve','C','/dataApply/approve','AuditOutlined',         2);
+(81, 8,  '数据申请',   'dataApply:apply', 'C', '/dataApply/apply', 'pages/DataApply/Apply','dataApply:apply:view','FileAddOutlined',     1),
+(82, 8,  '申请审批',   'dataApply:approve','C','/dataApply/approve','pages/DataApply/Approve','dataApply:approve:view','AuditOutlined',      2);
 
 -- 初始化角色-菜单关联 (超级管理员拥有全部权限)
 INSERT INTO sys_role_menu (role_id, menu_id)

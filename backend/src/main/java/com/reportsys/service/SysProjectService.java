@@ -36,17 +36,13 @@ public class SysProjectService {
                 Wrappers.<SysProject>lambdaQuery().eq(SysProject::getStatus, 1));
 
         for (SysDept dept : depts) {
-            List<SysProject> children = new ArrayList<>();
+            List<SysProject> deptProjects = new ArrayList<>();
             for (SysProject proj : projects) {
                 if (proj.getDeptId().equals(dept.getId())) {
-                    children.add(proj);
+                    deptProjects.add(proj);
                 }
             }
-            if (!children.isEmpty()) {
-                dept.setChildren(new ArrayList<>());
-                // 注意: SysDept.children 是 List<SysDept>，项目不能直接放进去
-                // 这里返回部门树，项目信息由前端组装
-            }
+            dept.setProjects(deptProjects);
         }
         return depts;
     }

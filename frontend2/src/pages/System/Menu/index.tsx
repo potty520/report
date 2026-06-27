@@ -31,7 +31,7 @@ const MenuPage: React.FC = () => {
     setEditingId(null);
     setModalTitle('新增菜单');
     editForm.resetFields();
-    editForm.setFieldsValue({ parentId, type: 1, sort: 0, visible: 1, status: 1 });
+    editForm.setFieldsValue({ parentId, menuType: 'C', sort: 0, visible: 1, status: 1 });
     setModalOpen(true);
   };
 
@@ -40,12 +40,12 @@ const MenuPage: React.FC = () => {
     setModalTitle('编辑菜单');
     editForm.setFieldsValue({
       parentId: record.parentId,
-      name: record.menuName,
+      menuName: record.menuName,
+      menuType: record.menuType,
       path: record.path,
       component: record.component,
       icon: record.icon,
       sort: record.sort,
-      type: record.menuType,
       permission: record.permission,
       visible: record.visible,
     });
@@ -111,7 +111,7 @@ const MenuPage: React.FC = () => {
 
   const columns: ColumnsType<MenuTreeItem & { level: number }> = [
     {
-      title: '菜单名称', dataIndex: 'name', width: 220,
+      title: '菜单名称', dataIndex: 'menuName', width: 220,
       render: (text: string, record: any) => (
         <span style={{ paddingLeft: record.level * 24 }}>
           {record.menuType === "M" ? <FolderOutlined style={{ marginRight: 8, color: '#faad14' }} /> :
@@ -126,12 +126,12 @@ const MenuPage: React.FC = () => {
       render: (v: string) => v || '-',
     },
     {
-      title: '类型', dataIndex: 'type', width: 80, align: 'center',
-      render: (v: number) => {
-        const map: Record<number, { color: string; text: string }> = {
-          0: { color: 'gold', text: '目录' },
-          1: { color: 'blue', text: '菜单' },
-          2: { color: 'green', text: '按钮' },
+      title: '类型', dataIndex: 'menuType', width: 80, align: 'center',
+      render: (v: string) => {
+        const map: Record<string, { color: string; text: string }> = {
+          M: { color: 'gold', text: '目录' },
+          C: { color: 'blue', text: '菜单' },
+          F: { color: 'green', text: '按钮' },
         };
         return <Tag color={map[v]?.color}>{map[v]?.text || v}</Tag>;
       },
@@ -203,14 +203,14 @@ const MenuPage: React.FC = () => {
               treeDefaultExpandAll
             />
           </Form.Item>
-          <Form.Item name="type" label="菜单类型" rules={[{ required: true, message: '请选择类型' }]}>
+          <Form.Item name="menuType" label="菜单类型" rules={[{ required: true, message: '请选择类型' }]}>
             <Select>
-              <Select.Option value={0}>目录</Select.Option>
-              <Select.Option value={1}>菜单</Select.Option>
-              <Select.Option value={2}>按钮</Select.Option>
+              <Select.Option value="M">目录</Select.Option>
+              <Select.Option value="C">菜单</Select.Option>
+              <Select.Option value="F">按钮</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="name" label="菜单名称" rules={[{ required: true, message: '请输入菜单名称' }]}>
+          <Form.Item name="menuName" label="菜单名称" rules={[{ required: true, message: '请输入菜单名称' }]}>
             <Input placeholder="请输入菜单名称" />
           </Form.Item>
           <Form.Item name="path" label="路由路径">

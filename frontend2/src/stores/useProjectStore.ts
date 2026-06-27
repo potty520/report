@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import {
   getProjectTreeApi, getProjectDetailApi, createProjectApi, updateProjectApi, deleteProjectApi,
-  ProjectItem, ProjectFormParams,
+  ProjectItem, ProjectFormParams, DeptItem,
 } from '@/services/api';
 
 interface ProjectState {
-  tree: ProjectItem[];
+  tree: DeptItem[];
   loading: boolean;
   currentItem: ProjectItem | null;
 
