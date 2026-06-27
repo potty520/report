@@ -57,7 +57,7 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         }
         if (uuid != null) CAPTCHA_MAP.remove(uuid);
         SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username));
-        if (user == null || user.getStatus() == 0 || !password.equals(user.getPassword())) {
+        if (user == null || user.getStatus() == 0 || !passwordEncoder.matches(password, user.getPassword())) {
             logLogin(user != null ? user.getId() : null, username, request, 0, "登录失败");
             return Result.error("用户名或密码错误");
         }
