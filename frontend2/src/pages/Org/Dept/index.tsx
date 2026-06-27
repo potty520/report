@@ -44,7 +44,7 @@ const DeptPage: React.FC = () => {
     return depts
       .sort((a, b) => a.sort - b.sort)
       .map((d) => ({
-        title: d.name,
+        title: d.deptName,
         key: d.id,
         children: d.children ? buildTree(d.children) : undefined,
       }));
@@ -53,7 +53,7 @@ const DeptPage: React.FC = () => {
   // Build tree select data
   const buildTreeSelectData = (depts: DeptItem[]): any[] => {
     return depts.map((d) => ({
-      title: d.name,
+      title: d.deptName,
       value: d.id,
       children: d.children ? buildTreeSelectData(d.children) : undefined,
     }));
@@ -98,7 +98,7 @@ const DeptPage: React.FC = () => {
     setModalTitle('编辑部门');
     editForm.setFieldsValue({
       parentId: selectedDept.parentId,
-      name: selectedDept.name,
+      deptName: selectedDept.deptName,
       sort: selectedDept.sort,
       leader: selectedDept.leader,
       phone: selectedDept.phone,
@@ -146,7 +146,7 @@ const DeptPage: React.FC = () => {
 
   const columns: ColumnsType<DeptItem & { level: number }> = [
     {
-      title: '部门名称', dataIndex: 'name', width: 250,
+      title: '部门名称', dataIndex: 'deptName', width: 250,
       render: (text: string, record: any) => (
         <span style={{ paddingLeft: record.level * 24 }}>
           <FolderOutlined style={{ marginRight: 8, color: '#1890ff' }} />
@@ -196,7 +196,7 @@ const DeptPage: React.FC = () => {
         {/* Selected dept info */}
         {selectedDept && (
           <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f6f8fa', borderRadius: 6 }}>
-            <strong>当前选中：</strong>{selectedDept.name}
+            <strong>当前选中：</strong>{selectedDept.deptName}
             <span style={{ marginLeft: 16, color: '#999' }}>
               负责人: {selectedDept.leader || '-'} | 电话: {selectedDept.phone || '-'}
             </span>
@@ -230,7 +230,7 @@ const DeptPage: React.FC = () => {
               treeDefaultExpandAll
             />
           </Form.Item>
-          <Form.Item name="name" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>
+          <Form.Item name="deptName" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>
             <Input placeholder="请输入部门名称" />
           </Form.Item>
           <Form.Item name="sort" label="排序">

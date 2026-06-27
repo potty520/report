@@ -134,12 +134,12 @@ export interface MenuTreeItem extends MenuItem {
 export interface MenuFormParams {
   id?: number;
   parentId: number;
-  name: string;
+  menuName: string;
+  menuType: number;
   path?: string;
   component?: string;
   icon?: string;
   sort?: number;
-  type: number;
   permission?: string;
   visible?: number;
 }
@@ -161,20 +161,22 @@ export interface LogItem {
 export interface DeptItem {
   id: number;
   parentId: number;
-  name: string;
+  deptName: string;
+  deptCode?: string;
   sort: number;
   leader?: string;
   phone?: string;
   email?: string;
   status: number;
   children?: DeptItem[];
+  projects?: ProjectItem[];
   createTime?: string;
 }
 
 export interface DeptFormParams {
   id?: number;
   parentId: number;
-  name: string;
+  deptName: string;
   sort?: number;
   leader?: string;
   phone?: string;
@@ -186,8 +188,8 @@ export interface DeptFormParams {
 export interface ProjectItem {
   id: number;
   parentId: number;
-  name: string;
-  code: string;
+  projectName: string;
+  projectCode?: string;
   sort: number;
   status: number;
   remark?: string;
@@ -198,8 +200,8 @@ export interface ProjectItem {
 export interface ProjectFormParams {
   id?: number;
   parentId: number;
-  name: string;
-  code: string;
+  projectName: string;
+  projectCode?: string;
   sort?: number;
   status?: number;
   remark?: string;
@@ -554,7 +556,7 @@ export async function deleteDeptApi(id: number) {
 
 // --- Project ---
 export async function getProjectTreeApi() {
-  return request.get<ApiResponse<ProjectItem[]>>('/project/tree');
+  return request.get<ApiResponse<DeptItem[]>>('/project/tree');
 }
 
 export async function getProjectDetailApi(id: number) {

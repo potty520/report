@@ -24,4 +24,7 @@ public class SysDept {
 
     @TableField(exist = false)
     private List<SysDept> children;
+
+    @TableField(exist = false)
+    private List<SysProject> projects;
 }
