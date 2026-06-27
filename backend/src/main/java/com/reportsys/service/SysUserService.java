@@ -3,6 +3,8 @@ package com.reportsys.service;
 import cn.hutool.captcha.CaptchaUtil;
 import cn.hutool.captcha.CircleCaptcha;
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.http.useragent.UserAgent;
+import cn.hutool.http.useragent.UserAgentUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -81,9 +83,39 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     private void logLogin(Long userId, String username, HttpServletRequest request, int status, String msg) {
         SysLoginLog log = new SysLoginLog();
         log.setUserId(userId); log.setUsername(username);
-        log.setIp(request.getRemoteAddr()); log.setLoginTime(LocalDateTime.now());
+        String ip = normalizeIp(request.getRemoteAddr());
+        log.setIp(ip); log.setLoginTime(LocalDateTime.now());
         log.setStatus(status); log.setMsg(msg);
+
+        String uaStr = request.getHeader("User-Agent");
+        if (uaStr != null && !uaStr.isEmpty()) {
+            UserAgent ua = UserAgentUtil.parse(uaStr);
+            String browser = ua.getBrowser().toString();
+            String os = ua.getOs().toString();
+            if (!"Unknown".equals(browser)) log.setBrowser(browser);
+            if (!"Unknown".equals(os)) log.setOs(os);
+        }
+        log.setLocation(getLocationByIp(ip));
+
         loginLogMapper.insert(log);
+    }
+
+    private String normalizeIp(String ip) {
+        if (ip == null) return "";
+        if ("0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip)) return "127.0.0.1";
+        return ip;
+    }
+
+    private String getLocationByIp(String ip) {
+        if (ip == null || ip.isEmpty()) return "";
+        if (ip.equals("127.0.0.1") || ip.startsWith("192.168.") || ip.startsWith("10.")) return "内网";
+        if (ip.startsWith("172.")) {
+            try {
+                int second = Integer.parseInt(ip.split("\\.")[1]);
+                if (second >= 16 && second <= 31) return "内网";
+            } catch (Exception ignored) {}
+        }
+        return "";
     }
 
     public Result<?> updatePwd(Long userId, String oldPassword, String newPassword) {
