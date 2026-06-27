@@ -62,48 +62,46 @@ const App: React.FC = () => {
     >
       <AntApp>
         <BrowserRouter>
-          <React.Suspense fallback={<PageLoading />}>
-            <Routes>
-              <Route path="/login" element={token ? <Navigate to="/overview" replace /> : <Login />} />
-              <Route path="/" element={token ? <MainLayout /> : <Navigate to="/login" replace />}>
-                <Route index element={<Navigate to="/overview" replace />} />
-                <Route path="overview" element={<Overview />} />
-                <Route path="userCenter" element={<UserCenter />} />
+          <Routes>
+            <Route path="/login" element={token ? <Navigate to="/overview" replace /> : <React.Suspense fallback={<PageLoading />}><Login /></React.Suspense>} />
+            <Route path="/" element={token ? <MainLayout /> : <Navigate to="/login" replace />}>
+              <Route index element={<Navigate to="/overview" replace />} />
+              <Route path="overview" element={<Overview />} />
+              <Route path="userCenter" element={<UserCenter />} />
 
-                {/* System */}
-                <Route path="system/user" element={<UserPage />} />
-                <Route path="system/role" element={<RolePage />} />
-                <Route path="system/menu" element={<MenuPage />} />
-                <Route path="system/log" element={<LogPage />} />
+              {/* System */}
+              <Route path="system/user" element={<UserPage />} />
+              <Route path="system/role" element={<RolePage />} />
+              <Route path="system/menu" element={<MenuPage />} />
+              <Route path="system/log" element={<LogPage />} />
 
-                {/* Org */}
-                <Route path="org/dept" element={<DeptPage />} />
-                <Route path="org/project" element={<ProjectPage />} />
+              {/* Org */}
+              <Route path="org/dept" element={<DeptPage />} />
+              <Route path="org/project" element={<ProjectPage />} />
 
-                {/* Template */}
-                <Route path="template/list" element={<TemplateList />} />
-                <Route path="template/add" element={<TemplateAdd />} />
-                <Route path="template/detail/:id" element={<TemplateDetail />} />
+              {/* Template */}
+              <Route path="template/list" element={<TemplateList />} />
+              <Route path="template/add" element={<TemplateAdd />} />
+              <Route path="template/detail/:id" element={<TemplateDetail />} />
 
-                {/* Datasource */}
-                <Route path="datasource/list" element={<DatasourceList />} />
+              {/* Datasource */}
+              <Route path="datasource/list" element={<DatasourceList />} />
 
-                {/* Task */}
-                <Route path="task/formulation" element={<TaskFormulation />} />
-                <Route path="task/assign" element={<TaskAssign />} />
-                <Route path="task/ledger" element={<TaskLedger />} />
+              {/* Task */}
+              <Route path="task/formulation" element={<TaskFormulation />} />
+              <Route path="task/assign" element={<TaskAssign />} />
+              <Route path="task/ledger" element={<TaskLedger />} />
 
-                {/* Fill */}
-                <Route path="fill/task" element={<FillTask />} />
-                <Route path="fill/audit" element={<FillAudit />} />
+              {/* Fill */}
+              <Route path="fill/task" element={<FillTask />} />
+              <Route path="fill/audit" element={<FillAudit />} />
 
-                {/* Data Apply */}
-                <Route path="dataApply/apply" element={<DataApplyApply />} />
-                <Route path="dataApply/approve" element={<DataApplyApprove />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </React.Suspense>
+              {/* Data Apply */}
+              <Route path="dataApply/apply" element={<DataApplyApply />} />
+              <Route path="dataApply/approve" element={<DataApplyApprove />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </BrowserRouter>
       </AntApp>
     </ConfigProvider>

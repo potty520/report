@@ -2,21 +2,22 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Tree, TreeSelect, Select, message, Popconfirm, App,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ProjectOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ProjectOutlined, ApartmentOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useProjectStore } from '@/stores/useProjectStore';
-import type { ProjectItem, ProjectFormParams } from '@/services/api';
+import type { ProjectItem, ProjectFormParams, DeptItem } from '@/services/api';
 
 const ProjectPage: React.FC = () => {
   const { message: msg } = App.useApp();
-  const { tree, loading, fetchTree, create, update, remove, setCurrentItem } = useProjectStore();
+  const { tree, loading, fetchTree, create, update, remove } = useProjectStore();
 
   const [editForm] = Form.useForm();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('新增项目');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null);
-  const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
+  const [selectedDept, setSelectedDept] = useState<DeptItem | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
   const doFetch = useCallback(() => {
     fetchTree();
@@ -26,65 +27,91 @@ const ProjectPage: React.FC = () => {
     doFetch();
   }, [doFetch]);
 
-  // Flatten project tree
-  const flattenProjects = (projects: ProjectItem[], level: number = 0): (ProjectItem & { level: number })[] => {
-    const result: (ProjectItem & { level: number })[] = [];
-    for (const p of projects) {
-      result.push({ ...p, level });
-      if (p.children && p.children.length > 0) {
-        result.push(...flattenProjects(p.children, level + 1));
+  // Flatten all projects from dept tree
+  const allProjects: (ProjectItem & { level: number; deptName: string })[] = [];
+  for (const dept of tree) {
+    if (dept.projects) {
+      for (const proj of dept.projects) {
+        allProjects.push({ ...proj, level: 0, deptName: dept.deptName });
       }
     }
-    return result;
-  };
+  }
 
-  const flatProjects = flattenProjects(tree);
-
-  const buildTree = (projects: ProjectItem[]): any[] => {
-    return projects
+  // Build tree: dept nodes → project children
+  const buildTree = (depts: DeptItem[]): any[] => {
+    return depts
       .sort((a, b) => a.sort - b.sort)
-      .map((p) => ({
-        title: p.name,
-        key: p.id,
-        children: p.children ? buildTree(p.children) : undefined,
+      .map((dept) => ({
+        title: dept.deptName,
+        key: `dept-${dept.id}`,
+        icon: <ApartmentOutlined style={{ color: '#1677ff' }} />,
+        selectable: false,
+        children: (dept.projects || [])
+          .sort((a, b) => a.sort - b.sort)
+          .map((proj) => ({
+            title: proj.projectName,
+            key: `proj-${proj.id}`,
+            icon: <ProjectOutlined style={{ color: '#722ed1' }} />,
+            isLeaf: true,
+          })),
       }));
   };
 
-  const buildTreeSelectData = (projects: ProjectItem[]): any[] => {
-    return projects.map((p) => ({
-      title: p.name,
-      value: p.id,
-      children: p.children ? buildTreeSelectData(p.children) : undefined,
-    }));
+  // Build tree select data for modal
+  const buildTreeSelectData = (depts: DeptItem[]): any[] => {
+    return depts
+      .sort((a, b) => a.sort - b.sort)
+      .map((dept) => ({
+        title: dept.deptName,
+        value: `dept-${dept.id}`,
+        disabled: true,
+        children: (dept.projects || [])
+          .sort((a, b) => a.sort - b.sort)
+          .map((proj) => ({
+            title: proj.projectName,
+            value: proj.id,
+          })),
+      }));
   };
 
   const handleTreeSelect = (keys: React.Key[]) => {
     if (keys.length > 0) {
-      setSelectedKeys(keys as number[]);
-      const id = keys[0] as number;
-      const findProject = (projects: ProjectItem[], pid: number): ProjectItem | null => {
-        for (const p of projects) {
-          if (p.id === pid) return p;
-          if (p.children) {
-            const found = findProject(p.children, pid);
-            if (found) return found;
+      const key = String(keys[0]);
+      setSelectedKeys([key]);
+
+      if (key.startsWith('proj-')) {
+        const projId = Number(key.replace('proj-', ''));
+        // Find project in all depts
+        for (const dept of tree) {
+          if (dept.projects) {
+            const found = dept.projects.find(p => p.id === projId);
+            if (found) {
+              setSelectedProject(found);
+              setSelectedDept(dept);
+              return;
+            }
           }
         }
-        return null;
-      };
-      const proj = findProject(tree, id);
-      setSelectedProject(proj);
+      } else if (key.startsWith('dept-')) {
+        const deptId = Number(key.replace('dept-', ''));
+        const found = tree.find(d => d.id === deptId);
+        if (found) {
+          setSelectedDept(found);
+          setSelectedProject(null);
+        }
+      }
     } else {
       setSelectedKeys([]);
       setSelectedProject(null);
+      setSelectedDept(null);
     }
   };
 
-  const handleAdd = (parentId: number | null = null) => {
+  const handleAdd = () => {
     setEditingId(null);
     setModalTitle('新增项目');
     editForm.resetFields();
-    editForm.setFieldsValue({ parentId: parentId ?? (selectedKeys[0] || 0), sort: 0, status: 1 });
+    editForm.setFieldsValue({ parentId: 0, sort: 0, status: 1 });
     setModalOpen(true);
   };
 
@@ -97,8 +124,8 @@ const ProjectPage: React.FC = () => {
     setModalTitle('编辑项目');
     editForm.setFieldsValue({
       parentId: selectedProject.parentId,
-      name: selectedProject.name,
-      code: selectedProject.code,
+      projectName: selectedProject.projectName,
+      projectCode: selectedProject.projectCode,
       sort: selectedProject.sort,
       status: selectedProject.status,
       remark: selectedProject.remark,
@@ -115,6 +142,7 @@ const ProjectPage: React.FC = () => {
       await remove(selectedProject.id);
       msg.success('删除成功');
       setSelectedProject(null);
+      setSelectedDept(null);
       setSelectedKeys([]);
       doFetch();
     } catch {
@@ -142,17 +170,21 @@ const ProjectPage: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<ProjectItem & { level: number }> = [
+  const columns: ColumnsType<ProjectItem & { level: number; deptName: string }> = [
     {
-      title: '项目名称', dataIndex: 'name', width: 250,
-      render: (text: string, record: any) => (
-        <span style={{ paddingLeft: record.level * 24 }}>
+      title: '项目名称', dataIndex: 'projectName', width: 200,
+      render: (text: string) => (
+        <span>
           <ProjectOutlined style={{ marginRight: 8, color: '#722ed1' }} />
           {text}
         </span>
       ),
     },
-    { title: '项目编码', dataIndex: 'code', width: 150 },
+    { title: '项目编码', dataIndex: 'projectCode', width: 150 },
+    {
+      title: '所属部门', dataIndex: 'deptName', width: 120,
+      render: (v: string) => v || '-',
+    },
     { title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
     { title: '备注', dataIndex: 'remark', ellipsis: true, render: (v: string) => v || '-' },
     {
@@ -190,18 +222,18 @@ const ProjectPage: React.FC = () => {
 
         {selectedProject && (
           <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f6f8fa', borderRadius: 6 }}>
-            <strong>当前选中：</strong>{selectedProject.name}
-            <span style={{ marginLeft: 16, color: '#999' }}>编码: {selectedProject.code || '-'}</span>
+            <strong>当前选中：</strong>{selectedProject.projectName}
+            <span style={{ marginLeft: 16, color: '#999' }}>编码: {selectedProject.projectCode || '-'}</span>
+            <span style={{ marginLeft: 16, color: '#999' }}>所属部门: {selectedDept?.deptName || '-'}</span>
           </div>
         )}
 
         <Table
           columns={columns}
-          dataSource={flatProjects}
+          dataSource={allProjects}
           rowKey="id"
           loading={loading}
           pagination={false}
-          defaultExpandAllRows
         />
       </div>
 
@@ -221,10 +253,10 @@ const ProjectPage: React.FC = () => {
               treeDefaultExpandAll
             />
           </Form.Item>
-          <Form.Item name="name" label="项目名称" rules={[{ required: true, message: '请输入项目名称' }]}>
+          <Form.Item name="projectName" label="项目名称" rules={[{ required: true, message: '请输入项目名称' }]}>
             <Input placeholder="请输入项目名称" />
           </Form.Item>
-          <Form.Item name="code" label="项目编码" rules={[{ required: true, message: '请输入项目编码' }]}>
+          <Form.Item name="projectCode" label="项目编码" rules={[{ required: true, message: '请输入项目编码' }]}>
             <Input placeholder="请输入项目编码" disabled={!!editingId} />
           </Form.Item>
           <Form.Item name="sort" label="排序">

@@ -9,6 +9,7 @@ import {
   KeyOutlined,
 } from '@ant-design/icons';
 import SiderMenu from '@/components/SiderMenu';
+import PageLoading from '@/components/PageLoading';
 import { useAuthStore } from '@/stores/useAuthStore';
 import './MainLayout.css';
 
@@ -109,7 +110,9 @@ const MainLayout: React.FC = () => {
           </div>
         </Header>
         <Content className="main-content">
-          <Outlet />
+          <React.Suspense fallback={<PageLoading />}>
+            <Outlet />
+          </React.Suspense>
         </Content>
         <Footer className="main-footer">
           数据填报系统 ©{new Date().getFullYear()} Created with React + Ant Design

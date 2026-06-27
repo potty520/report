@@ -26,7 +26,7 @@ const LogPage: React.FC = () => {
     setLoading(true);
     getLogListApi({ current: 1, size: 10, ...params })
       .then((res) => {
-        const { records, total: t, current: c, size: s } = res.data.data;
+        const { list: records, total: t, pageNum: c, pageSize: s } = res.data.data;
         setList(records);
         setTotal(t);
         setCurrent(c);

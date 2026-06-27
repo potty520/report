@@ -15,6 +15,8 @@ public class SysMenu {
     private String menuCode;
     private String menuType;
     private String path;
+    private String component;
+    private String permission;
     private String icon;
     private Integer sort;
     private Integer status;
