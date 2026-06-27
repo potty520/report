@@ -1,0 +1,33 @@
+# Maven
+backend/target/
+*.jar
+*.war
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend2/node_modules/
+frontend2/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Config with secrets (add back after sanitizing)
+*.yml.bak
+*.properties.bak
+
+# Temp
+/tmp/
+*.tmp
