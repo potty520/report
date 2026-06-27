@@ -1,0 +1,358 @@
+{
+  "total": 35,
+  "passed": 27,
+  "failed": 8,
+  "skipped": 27,
+  "results": [
+    {
+      "category": "认证模块",
+      "method": "GET",
+      "path": "/auth/captcha",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"captchaImage\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAAoCAYAAAA16j4lAAADhUlEQVR4Xu2W7UtTURzHBf+IXgcRUbLCFxEU9GQK9iLoTVG9CyKTCsHEIEl6WCnLMIsIyowIIqKHNzafs"
+    },
+    {
+      "category": "认证模块",
+      "method": "POST",
+      "path": "/auth/login",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"userInfo\":{\"id\":1,\"username\":\"admin\"},\"menus\":[{\"id\":1,\"parentId\":0,\"menuName\":\"首页概览\",\"menuType\":\"C\",\"path\":\"/overview\",\"icon\":\"DashboardOutlined\",\"sort\":1,\"status\":1"
+    },
+    {
+      "category": "认证模块",
+      "method": "GET",
+      "path": "/auth/menu",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":[{\"id\":1,\"parentId\":0,\"menuName\":\"首页概览\",\"menuType\":\"C\",\"path\":\"/overview\",\"icon\":\"DashboardOutlined\",\"sort\":1,\"status\":1,\"visible\":1,\"children\":[]},{\"id\":2,\"parentId\":0"
+    },
+    {
+      "category": "认证模块",
+      "method": "PUT",
+      "path": "/auth/password",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"系统异常，请联系管理员\"}"
+    },
+    {
+      "category": "认证模块",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\"}"
+    },
+    {
+      "category": "用户管理",
+      "method": "GET",
+      "path": "/user/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"total\":2,\"pageNum\":1,\"pageSize\":10,\"pages\":1,\"list\":[{\"id\":1,\"username\":\"admin\",\"password\":\"***REMOVED_DEFAULT_ADMIN_PASSWORD***\",\"realName\":\"系统管理员\",\"email\":\"admin@example.com\",\"phone\":\"13800000"
+    },
+    {
+      "category": "用户管理",
+      "method": "GET",
+      "path": "/user/page?page=999&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"total\":2,\"pageNum\":999,\"pageSize\":10,\"pages\":1,\"list\":[]}}"
+    },
+    {
+      "category": "用户管理",
+      "method": "POST",
+      "path": "/user",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\"}"
+    },
+    {
+      "category": "用户管理",
+      "method": "POST",
+      "path": "/user",
+      "status_desc": "",
+      "expected": 0,
+      "actual": 200,
+      "passed": false,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'username' doesn't have a default value\\n### The error may exist in com/reportsys/dao/SysUserMapper.java (best gu"
+    },
+    {
+      "category": "角色管理",
+      "method": "GET",
+      "path": "/role/list",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":[{\"id\":1,\"roleName\":\"超级管理员\",\"roleCode\":\"ADMIN\",\"description\":\"超级管理员\",\"status\":1,\"createTime\":\"2026-06-27T10:29:12\"},{\"id\":2,\"roleName\":\"普通用户\",\"roleCode\":\"USER\",\"descrip"
+    },
+    {
+      "category": "角色管理",
+      "method": "POST",
+      "path": "/role",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'role_name' doesn't have a default value\\n### The error may exist in com/reportsys/dao/SysRoleMapper.java (best g"
+    },
+    {
+      "category": "菜单管理",
+      "method": "GET",
+      "path": "/menu/tree",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":[{\"id\":1,\"parentId\":0,\"menuName\":\"首页概览\",\"menuType\":\"C\",\"path\":\"/overview\",\"icon\":\"DashboardOutlined\",\"sort\":1,\"status\":1,\"visible\":1,\"children\":[]},{\"id\":2,\"parentId\":0"
+    },
+    {
+      "category": "菜单管理",
+      "method": "GET",
+      "path": "/menu/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"系统异常，请联系管理员\"}"
+    },
+    {
+      "category": "菜单管理",
+      "method": "POST",
+      "path": "/menu",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'menu_name' doesn't have a default value\\n### The error may exist in com/reportsys/dao/SysMenuMapper.java (best g"
+    },
+    {
+      "category": "部门管理",
+      "method": "GET",
+      "path": "/dept/list",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":[{\"id\":1,\"parentId\":0,\"deptName\":\"根部门\",\"deptCode\":\"ROOT\",\"leader\":\"\",\"phone\":\"\",\"sort\":0,\"status\":1,\"createTime\":\"2026-06-27T10:29:12\",\"updateTime\":\"2026-06-27T10:29:12"
+    },
+    {
+      "category": "部门管理",
+      "method": "POST",
+      "path": "/dept",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'dept_name' doesn't have a default value\\n### The error may exist in com/reportsys/dao/SysDeptMapper.java (best g"
+    },
+    {
+      "category": "项目管理",
+      "method": "GET",
+      "path": "/project/list",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":[{\"id\":1,\"deptId\":1,\"parentId\":0,\"projectName\":\"测试项目\",\"projectCode\":\"TEST_PJ\",\"description\":\"test\",\"status\":1,\"sort\":0,\"createTime\":\"2026-06-27T18:35:41\"}]}"
+    },
+    {
+      "category": "项目管理",
+      "method": "POST",
+      "path": "/project",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'project_name' doesn't have a default value\\n### The error may exist in com/reportsys/dao/SysProjectMapper.java ("
+    },
+    {
+      "category": "数据源管理",
+      "method": "GET",
+      "path": "/datasource/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"total\":2,\"pageNum\":1,\"pageSize\":10,\"pages\":1,\"list\":[{\"id\":2,\"dsName\":\"test_mysql\",\"dsType\":\"MySQL\",\"ip\":\"10.88.0.3\",\"port\":3306,\"dbName\":\"report_system\",\"username\":\""
+    },
+    {
+      "category": "数据源管理",
+      "method": "POST",
+      "path": "/datasource",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'ds_name' doesn't have a default value\\n### The error may exist in com/reportsys/dao/RptDatasourceMapper.java (be"
+    },
+    {
+      "category": "模板管理",
+      "method": "GET",
+      "path": "/template/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"total\":0,\"pageNum\":1,\"pageSize\":10,\"pages\":0,\"list\":[]}}"
+    },
+    {
+      "category": "模板管理",
+      "method": "POST",
+      "path": "/template",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"\\n### Error updating database.  Cause: java.sql.SQLException: Field 'template_name' doesn't have a default value\\n### The error may exist in com/reportsys/dao/RptTemplateMapper.java"
+    },
+    {
+      "category": "填报任务",
+      "method": "GET",
+      "path": "/task/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"total\":0,\"pageNum\":1,\"pageSize\":10,\"pages\":0,\"list\":[]}}"
+    },
+    {
+      "category": "填报任务",
+      "method": "GET",
+      "path": "/task/page?page=999&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"total\":0,\"pageNum\":999,\"pageSize\":10,\"pages\":0,\"list\":[]}}"
+    },
+    {
+      "category": "填报任务",
+      "method": "POST",
+      "path": "/task",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"模板不存在\"}"
+    },
+    {
+      "category": "数据审批",
+      "method": "GET",
+      "path": "/dataApply/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 404,
+      "passed": false,
+      "response_snippet": "{\"timestamp\":\"2026-06-27 18:42:38\",\"status\":404,\"error\":\"Not Found\",\"path\":\"/api/dataApply/page\"}"
+    },
+    {
+      "category": "数据审批",
+      "method": "POST",
+      "path": "/dataApply",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"系统异常，请联系管理员\"}"
+    },
+    {
+      "category": "填报审核",
+      "method": "POST",
+      "path": "/fill/save",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"系统异常，请联系管理员\"}"
+    },
+    {
+      "category": "填报审核",
+      "method": "POST",
+      "path": "/fill/submit",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response_snippet": "{\"code\":500,\"msg\":\"系统异常，请联系管理员\"}"
+    },
+    {
+      "category": "填报审核",
+      "method": "GET",
+      "path": "/fill/page?page=1",
+      "status_desc": "",
+      "expected": 200,
+      "actual": 404,
+      "passed": false,
+      "response_snippet": "{\"timestamp\":\"2026-06-27 18:42:38\",\"status\":404,\"error\":\"Not Found\",\"path\":\"/api/fill/page\"}"
+    },
+    {
+      "category": "填报审核",
+      "method": "POST",
+      "path": "/fill/upload",
+      "status_desc": "",
+      "expected": 0,
+      "actual": 200,
+      "passed": false,
+      "response_snippet": "{\"code\":500,\"msg\":\"Current request is not a multipart request\"}"
+    },
+    {
+      "category": "安全测试",
+      "method": "GET",
+      "path": "/user/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 0,
+      "actual": 200,
+      "passed": false,
+      "response_snippet": "{\"code\":401,\"msg\":\"未登录，请先登录\",\"data\":null}"
+    },
+    {
+      "category": "安全测试",
+      "method": "GET",
+      "path": "/role/list",
+      "status_desc": "",
+      "expected": 0,
+      "actual": 200,
+      "passed": false,
+      "response_snippet": "{\"code\":401,\"msg\":\"未登录，请先登录\",\"data\":null}"
+    },
+    {
+      "category": "安全测试",
+      "method": "GET",
+      "path": "/user/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 0,
+      "actual": 200,
+      "passed": false,
+      "response_snippet": "{\"code\":401,\"msg\":\"Token已过期，请重新登录\",\"data\":null}"
+    },
+    {
+      "category": "安全测试",
+      "method": "GET",
+      "path": "/user/page?page=1&size=10",
+      "status_desc": "",
+      "expected": 0,
+      "actual": 200,
+      "passed": false,
+      "response_snippet": "{\"code\":401,\"msg\":\"Token已过期，请重新登录\",\"data\":null}"
+    }
+  ]
+}
