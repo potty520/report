@@ -12,6 +12,7 @@ import com.reportsys.service.RptTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
@@ -130,6 +131,130 @@ public class OverviewController {
                 stats.add(item);
             }
             return Result.success(stats);
+        } catch (Exception e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 总览统计（前端 /overview/stats 契约）。
+     *
+     * 说明：前端首次渲染读取的是 totalTasks/completedTasks/pendingTasks/overdueTasks/
+     * totalFills/submittedFills/auditPassRate/totalDepts，而原后端只提供 /dashboard 与
+     * /deptStats，导致首页三个请求全部 404、页面没有真实数据。此处按前端契约补齐（全部真实统计）。
+     */
+    @GetMapping("/stats")
+    public Result<Map<String, Object>> stats() {
+        try {
+            long totalTasks = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery());
+            long completedTasks = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery()
+                    .eq(RptTask::getStatus, 3));
+            long pendingTasks = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery()
+                    .in(RptTask::getStatus, 1, 2));
+            long overdueTasks = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery()
+                    .isNotNull(RptTask::getFillDeadline)
+                    .lt(RptTask::getFillDeadline, LocalDateTime.now())
+                    .in(RptTask::getStatus, 1, 2));
+            long totalFills = rptTaskDataMapper.selectCount(Wrappers.<RptTaskData>lambdaQuery());
+            long submittedFills = rptTaskDataMapper.selectCount(Wrappers.<RptTaskData>lambdaQuery()
+                    .eq(RptTaskData::getStatus, 1));
+            long auditedFills = rptTaskDataMapper.selectCount(Wrappers.<RptTaskData>lambdaQuery()
+                    .eq(RptTaskData::getStatus, 1)
+                    .in(RptTaskData::getAuditStatus, 1, 2));
+            long totalDepts = sysDeptMapper.selectCount(Wrappers.<SysDept>lambdaQuery());
+
+            Map<String, Object> out = new HashMap<>();
+            out.put("totalTasks", totalTasks);
+            out.put("completedTasks", completedTasks);
+            out.put("pendingTasks", pendingTasks);
+            out.put("overdueTasks", overdueTasks);
+            out.put("totalFills", totalFills);
+            out.put("submittedFills", submittedFills);
+            out.put("auditPassRate", submittedFills > 0 ? round2(auditedFills * 100.0 / submittedFills) : 0);
+            out.put("totalDepts", totalDepts);
+            return Result.success(out);
+        } catch (Exception e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 近 7 天趋势（前端 /overview/trend 契约：date / fillCount / submitCount / auditCount）。
+     */
+    @GetMapping("/trend")
+    public Result<List<Map<String, Object>>> trend() {
+        try {
+            LocalDate today = LocalDate.now();
+            LocalDateTime from = today.minusDays(6).atStartOfDay();
+            List<RptTaskData> recent = rptTaskDataMapper.selectList(Wrappers.<RptTaskData>lambdaQuery()
+                    .ge(RptTaskData::getCreateTime, from));
+            Map<LocalDate, long[]> byDay = new HashMap<>();
+            for (RptTaskData data : recent) {
+                if (data.getCreateTime() != null) {
+                    byDay.computeIfAbsent(data.getCreateTime().toLocalDate(), k -> new long[3])[0]++;
+                }
+                if (data.getSubmitTime() != null) {
+                    byDay.computeIfAbsent(data.getSubmitTime().toLocalDate(), k -> new long[3])[1]++;
+                }
+                if (data.getAuditTime() != null) {
+                    byDay.computeIfAbsent(data.getAuditTime().toLocalDate(), k -> new long[3])[2]++;
+                }
+            }
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (int i = 6; i >= 0; i--) {
+                LocalDate day = today.minusDays(i);
+                long[] counts = byDay.getOrDefault(day, new long[3]);
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", day.toString());
+                item.put("day", day.format(DAY_FORMAT));
+                item.put("fillCount", counts[0]);
+                item.put("submitCount", counts[1]);
+                item.put("auditCount", counts[2]);
+                out.add(item);
+            }
+            return Result.success(out);
+        } catch (Exception e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 图表数据（前端 /overview/chart?type=xxx 契约：[{name, value}]）。
+     * type=dept（默认）按部门统计任务数；type=status 按任务状态分布。
+     */
+    @GetMapping("/chart")
+    public Result<List<Map<String, Object>>> chart(
+            @RequestParam(required = false, defaultValue = "dept") String type) {
+        try {
+            List<Map<String, Object>> out = new ArrayList<>();
+            if ("status".equalsIgnoreCase(type)) {
+                String[] labels = {"草稿", "已发布", "填报中", "已完成", "已关闭"};
+                int[] statuses = {0, 1, 2, 3, 4};
+                for (int i = 0; i < statuses.length; i++) {
+                    long count = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery()
+                            .eq(RptTask::getStatus, statuses[i]));
+                    if (count > 0) {
+                        Map<String, Object> item = new HashMap<>();
+                        item.put("name", labels[i]);
+                        item.put("value", count);
+                        out.add(item);
+                    }
+                }
+            } else {
+                List<SysDept> depts = sysDeptMapper.selectList(Wrappers.<SysDept>lambdaQuery()
+                        .orderByAsc(SysDept::getId));
+                for (SysDept dept : depts) {
+                    long count = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery()
+                            .eq(RptTask::getDeptId, dept.getId()));
+                    if (count > 0) {
+                        Map<String, Object> item = new HashMap<>();
+                        item.put("name", dept.getDeptName());
+                        item.put("value", count);
+                        out.add(item);
+                    }
+                }
+            }
+            return Result.success(out);
         } catch (Exception e) {
             return Result.error(e.getMessage());
         }
