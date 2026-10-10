@@ -438,7 +438,7 @@ export async function getCaptchaApi() {
 }
 
 export async function getCurrentUserApi() {
-  return request.get<ApiResponse<UserInfo>>('/auth/current-user');
+  return request.get<ApiResponse<UserInfo>>('/auth/current-user'); // 后端已在 CompatController 补齐
 }
 
 export async function changePasswordApi(params: ChangePasswordParams) {
@@ -459,7 +459,7 @@ export async function createUserApi(data: UserFormParams) {
 }
 
 export async function updateUserApi(data: UserFormParams) {
-  return request.put<ApiResponse<null>>(`/user/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/user', data);
 }
 
 export async function deleteUserApi(id: number) {
@@ -480,7 +480,7 @@ export async function getRoleListApi(params: PageParams) {
 }
 
 export async function getAllRolesApi() {
-  return request.get<ApiResponse<RoleItem[]>>('/role/all');
+  return request.get<ApiResponse<RoleItem[]>>('/role/list');
 }
 
 export async function getRoleDetailApi(id: number) {
@@ -492,7 +492,7 @@ export async function createRoleApi(data: RoleFormParams) {
 }
 
 export async function updateRoleApi(data: RoleFormParams) {
-  return request.put<ApiResponse<null>>(`/role/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/role', data);
 }
 
 export async function deleteRoleApi(id: number) {
@@ -517,7 +517,7 @@ export async function createMenuApi(data: MenuFormParams) {
 }
 
 export async function updateMenuApi(data: MenuFormParams) {
-  return request.put<ApiResponse<null>>(`/menu/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/menu', data);
 }
 
 export async function deleteMenuApi(id: number) {
@@ -539,7 +539,7 @@ export async function getDeptTreeApi() {
 }
 
 export async function getDeptDetailApi(id: number) {
-  return request.get<ApiResponse<DeptItem>>(`/org/dept/${id}`);
+  return request.get<ApiResponse<DeptItem>>(`/dept/${id}`);
 }
 
 export async function createDeptApi(data: DeptFormParams) {
@@ -547,11 +547,11 @@ export async function createDeptApi(data: DeptFormParams) {
 }
 
 export async function updateDeptApi(data: DeptFormParams) {
-  return request.put<ApiResponse<null>>(`/org/dept/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/dept', data);
 }
 
 export async function deleteDeptApi(id: number) {
-  return request.delete<ApiResponse<null>>(`/org/dept/${id}`);
+  return request.delete<ApiResponse<null>>(`/dept/${id}`);
 }
 
 // --- Project ---
@@ -560,7 +560,7 @@ export async function getProjectTreeApi() {
 }
 
 export async function getProjectDetailApi(id: number) {
-  return request.get<ApiResponse<ProjectItem>>(`/org/project/${id}`);
+  return request.get<ApiResponse<ProjectItem>>(`/project/${id}`);
 }
 
 export async function createProjectApi(data: ProjectFormParams) {
@@ -568,11 +568,11 @@ export async function createProjectApi(data: ProjectFormParams) {
 }
 
 export async function updateProjectApi(data: ProjectFormParams) {
-  return request.put<ApiResponse<null>>(`/org/project/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/project', data);
 }
 
 export async function deleteProjectApi(id: number) {
-  return request.delete<ApiResponse<null>>(`/org/project/${id}`);
+  return request.delete<ApiResponse<null>>(`/project/${id}`);
 }
 
 // --- Template ---
@@ -787,7 +787,7 @@ export async function createDatasourceApi(data: DatasourceFormParams) {
 }
 
 export async function updateDatasourceApi(data: DatasourceFormParams) {
-  return request.put<ApiResponse<null>>(`/datasource/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/datasource', data);
 }
 
 export async function deleteDatasourceApi(id: number) {
@@ -795,7 +795,14 @@ export async function deleteDatasourceApi(id: number) {
 }
 
 export async function testDatasourceConnectionApi(data: DatasourceFormParams) {
-  return request.post<ApiResponse<TestConnectionResult>>('/datasource/test-connection', data);
+  // 后端端点是 POST /datasource/test（@RequestParam），不是 /test-connection(JSON)
+  const d = data as unknown as Record<string, any>;
+  return request.post<ApiResponse<TestConnectionResult>>('/datasource/test', {}, {
+    params: {
+      ip: d.ip, port: d.port, dbName: d.dbName ?? d.database,
+      username: d.username, password: d.password, dsType: d.dsType ?? d.type,
+    },
+  });
 }
 
 // --- Task ---
@@ -812,7 +819,7 @@ export async function createTaskApi(data: TaskFormParams) {
 }
 
 export async function updateTaskApi(data: TaskFormParams) {
-  return request.put<ApiResponse<null>>(`/task/${data.id}`, data);
+  return request.put<ApiResponse<null>>('/task', data);
 }
 
 export async function deleteTaskApi(id: number) {
@@ -833,7 +840,12 @@ export async function getTaskAssignListApi(params: PageParams) {
 }
 
 export async function assignTaskApi(data: TaskAssignFormParams) {
-  return request.post<ApiResponse<null>>('/task/assign', data);
+  // 后端端点是 POST /task/{id}/assign（query 参数 deptIds/userIds/assignType）
+  const d = data as unknown as Record<string, any>;
+  const taskId = d.taskId;
+  return request.post<ApiResponse<null>>(`/task/${taskId}/assign`, {}, {
+    params: { deptIds: d.deptIds, userIds: d.userIds, assignType: d.assignType },
+  });
 }
 
 export async function cancelAssignApi(id: number) {
@@ -842,7 +854,7 @@ export async function cancelAssignApi(id: number) {
 
 // --- Task Ledger ---
 export async function getTaskLedgerListApi(params: PageParams & { perspective?: 'host' | 'executor' }) {
-  return request.get<ApiResponse<PageResult<TaskLedgerItem>>>('/task/ledger/page', { params });
+  return request.get<ApiResponse<PageResult<TaskLedgerItem>>>('/ledger/hostTaskTotal', { params });
 }
 
 // --- Fill ---
@@ -859,50 +871,63 @@ export async function submitFillDataApi(data: FillDataForm) {
 }
 
 export async function saveFillDraftApi(data: FillDataForm) {
-  return request.post<ApiResponse<null>>('/fill/draft', data);
+  return request.post<ApiResponse<null>>('/fill/save', data);
 }
 
 // --- Audit ---
 export async function getAuditListApi(params: PageParams & { auditType?: 'dept' | 'task' }) {
-  return request.get<ApiResponse<PageResult<AuditItem>>>('/fill/audit/page', { params });
+  return request.get<ApiResponse<PageResult<AuditItem>>>('/audit/myTasks', { params });
 }
 
 export async function getAuditDetailApi(id: number) {
-  return request.get<ApiResponse<any>>(`/fill/audit/${id}`);
+  return request.get<ApiResponse<any>>(`/audit/task/${id}`);
 }
 
 export async function submitAuditApi(data: AuditFormParams) {
-  return request.post<ApiResponse<null>>('/fill/audit/submit', data);
+  // 后端端点为 POST /audit/dept-audit | /audit/task-audit（query: taskDataId/pass/comment）
+  const d = data as unknown as Record<string, any>;
+  const path = d.auditType === 'task' ? '/audit/task-audit' : '/audit/dept-audit';
+  const taskDataId = d.taskDataId ?? d.dataId ?? d.id;
+  const pass = d.pass ?? d.approved ?? (d.status === 1);
+  return request.post<ApiResponse<null>>(path, {}, {
+    params: { taskDataId, pass, comment: d.comment ?? d.auditComment },
+  });
 }
 
 // --- Data Apply ---
 export async function getDataApplyListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/data-apply/page', { params });
+  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/dataApply/', { params });
 }
 
 export async function getDataApplyDetailApi(id: number) {
-  return request.get<ApiResponse<DataApplyItem>>(`/data-apply/${id}`);
+  return request.get<ApiResponse<DataApplyItem>>(`/dataApply/${id}`);
 }
 
 export async function createDataApplyApi(data: DataApplyFormParams) {
-  return request.post<ApiResponse<null>>('/data-apply', data);
+  return request.post<ApiResponse<null>>('/dataApply/', data);
 }
 
 export async function updateDataApplyApi(id: number, data: DataApplyFormParams) {
-  return request.put<ApiResponse<null>>(`/data-apply/${id}`, data);
+  return request.put<ApiResponse<null>>(`/dataApply/${id}`, data);
 }
 
 export async function deleteDataApplyApi(id: number) {
-  return request.delete<ApiResponse<null>>(`/data-apply/${id}`);
+  return request.delete<ApiResponse<null>>(`/dataApply/${id}`);
 }
 
 // Data Apply - Approval
 export async function getApproveListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/data-apply/approve/page', { params });
+  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/dataApply/approveList', { params });
 }
 
 export async function submitApprovalApi(data: ApproveFormParams) {
-  return request.post<ApiResponse<null>>('/data-apply/approve', data);
+  // 后端为 POST /dataApply/{id}/approve | /reject?auditComment=
+  const d = data as unknown as Record<string, any>;
+  const id = d.id ?? d.applyId;
+  const rejected = d.pass === false || d.approved === false || d.status === 2;
+  return rejected
+    ? request.post<ApiResponse<null>>(`/dataApply/${id}/reject`, {}, { params: { auditComment: d.comment ?? d.auditComment } })
+    : request.post<ApiResponse<null>>(`/dataApply/${id}/approve`);
 }
 
 // --- Overview ---
