@@ -29,7 +29,7 @@ const TaskAssignPage: React.FC = () => {
   const loadTasks = async () => {
     try {
       const res = await getTaskListApi({ current: 1, size: 1000, status: 1 });
-      setTaskList(res.data.data.records || []);
+      setTaskList(res.data.data.list || []);
     } catch { /* ignore */ }
   };
 
@@ -59,7 +59,7 @@ const TaskAssignPage: React.FC = () => {
 
   const flattenDept = (depts: DeptItem[], prefix = ''): { key: string; title: string }[] => {
     return depts.reduce((acc: { key: string; title: string }[], d) => {
-      acc.push({ key: String(d.id), title: prefix + d.name });
+      acc.push({ key: String(d.id), title: prefix + d.deptName });
       if (d.children && d.children.length > 0) {
         acc.push(...flattenDept(d.children, prefix + '  '));
       }

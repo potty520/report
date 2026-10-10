@@ -127,10 +127,10 @@ const RolePage: React.FC = () => {
   // Build tree data for Tree component
   const buildTreeData = (menus: MenuTreeItem[]): any[] => {
     return menus
-      .filter((m) => m.menuType !== 2) // filter buttons
+      .filter((m) => m.menuType !== 'F') // filter buttons
       .sort((a, b) => a.sort - b.sort)
       .map((menu) => ({
-        title: menu.name,
+        title: menu.menuName,
         key: menu.id,
         children: menu.children ? buildTreeData(menu.children) : undefined,
       }));

@@ -113,7 +113,7 @@ const TemplateAddPage: React.FC = () => {
   const loadDatasources = async () => {
     try {
       const res = await getDatasourceListApi({ current: 1, size: 100 });
-      setDatasources(res.data.data.records || []);
+      setDatasources(res.data.data.list || []);
     } catch {
       // ignore
     }
