@@ -5,12 +5,15 @@ import com.reportsys.model.SysDept;
 import com.reportsys.model.SysProject;
 import com.reportsys.service.SysProjectService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/project")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
 public class ProjectController {
 
     @Autowired
@@ -50,6 +53,8 @@ public class ProjectController {
         try {
             sysProjectService.add(project);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -63,6 +68,8 @@ public class ProjectController {
         try {
             sysProjectService.update(project);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -76,6 +83,8 @@ public class ProjectController {
         try {
             sysProjectService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

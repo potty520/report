@@ -7,13 +7,18 @@ import com.reportsys.service.RptTaskDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.reportsys.annotation.OperLog;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/audit")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','AUDIT_USER')")
 public class AuditController {
 
     @Autowired
@@ -66,6 +71,8 @@ public class AuditController {
             }
             rptTaskDataService.audit(taskDataId, 1, auditComment, userId);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -84,6 +91,8 @@ public class AuditController {
             }
             rptTaskDataService.audit(taskDataId, 2, auditComment, userId);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -112,6 +121,106 @@ public class AuditController {
             stats.put("totalCount", allResult.getTotal());
             return Result.success(stats);
         } catch (Exception e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 部门审核（双通道第一级，P0-C）
+     */
+    @PostMapping("/dept-audit")
+    @OperLog(module = "填报审核", action = "部门审核")
+    public Result<Void> deptAudit(@RequestParam Long taskDataId,
+                                   @RequestParam boolean pass,
+                                   @RequestParam(required = false) String comment) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptTaskDataService.deptAudit(taskDataId, pass, comment, userId);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 任务方审核（双通道第二级，需部门审核通过，P0-C）
+     */
+    @PostMapping("/task-audit")
+    @OperLog(module = "填报审核", action = "任务方审核")
+    public Result<Void> taskAudit(@RequestParam Long taskDataId,
+                                   @RequestParam boolean pass,
+                                   @RequestParam(required = false) String comment) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptTaskDataService.taskAudit(taskDataId, pass, comment, userId);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 任务流转轨迹（P0-C）
+     */
+    @GetMapping("/trajectory")
+    public Result<List<Map<String, Object>>> trajectory(@RequestParam Long taskId) {
+        try {
+            return Result.success(rptTaskDataService.trajectory(taskId));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 发起补正（任务方勾选需要补正的数据）
+     */
+    @PostMapping("/correct/start")
+    public Result<Long> startCorrect(@RequestParam Long taskId,
+                                      @RequestParam(required = false) String dataIds,
+                                      @RequestParam(required = false) String comment) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            return Result.success(rptTaskDataService.startCorrect(taskId, dataIds, comment, userId));
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 关闭补正
+     */
+    @PostMapping("/correct/close")
+    public Result<Void> closeCorrect(@RequestParam Long taskId,
+                                      @RequestParam(required = false) String comment) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptTaskDataService.closeCorrect(taskId, userId, comment);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 补正批次列表
+     */
+    @GetMapping("/correct/list")
+    public Result<List<Map<String, Object>>> correctList(@RequestParam Long taskId) {
+        try {
+            return Result.success(rptTaskDataService.correctList(taskId));
+        } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
     }
