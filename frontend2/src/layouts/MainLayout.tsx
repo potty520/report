@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Layout, Dropdown, Avatar, theme, App } from 'antd';
+import { Layout, Dropdown, Avatar, theme, App, Badge, Tooltip } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   UserOutlined,
   LogoutOutlined,
   KeyOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
 import SiderMenu from '@/components/SiderMenu';
 import PageLoading from '@/components/PageLoading';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useTodoStore } from '@/stores/useTodoStore';
 import './MainLayout.css';
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -21,6 +23,14 @@ const MainLayout: React.FC = () => {
   const { message: msg, modal } = App.useApp();
   const { userInfo, menus, logout } = useAuthStore();
   const { token: themeToken } = theme.useToken();
+  const { summary, fetchSummary } = useTodoStore();
+
+  // 消息中心未读数：进入布局时拉一次，之后每 60 秒刷新
+  useEffect(() => {
+    fetchSummary();
+    const timer = window.setInterval(() => { fetchSummary(); }, 60000);
+    return () => window.clearInterval(timer);
+  }, [fetchSummary]);
 
   const handleMenuCollapse = () => {
     setCollapsed(!collapsed);
@@ -101,6 +111,16 @@ const MainLayout: React.FC = () => {
             </span>
           </div>
           <div className="header-right">
+            <Tooltip title="消息中心">
+              <span
+                style={{ cursor: 'pointer', marginRight: 20, fontSize: 18 }}
+                onClick={() => navigate('/todo')}
+              >
+                <Badge count={summary.todoCount ?? 0} size="small" offset={[2, -2]}>
+                  <BellOutlined />
+                </Badge>
+              </span>
+            </Tooltip>
             <Dropdown menu={userMenuItems} placement="bottomRight">
               <div className="user-info">
                 <Avatar size="small" icon={<UserOutlined />} style={{ backgroundColor: themeToken.colorPrimary }} />

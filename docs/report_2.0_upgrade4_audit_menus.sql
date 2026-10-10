@@ -40,6 +40,25 @@ INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
   (1, 30), (2, 30), (3, 30);
 
 -- ---------------------------------------------------------------------------
+-- P1-F / P2-G 消息中心 / 字典管理 / 审计日志 / 数据范围
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (31, 0, '消息中心', 'C', '/todo', 'Todo', 'BellOutlined', 10, 1, 'todo:list');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (32, 2, '字典管理', 'C', '/system/dict', 'System/Dict', 'BookOutlined', 4, 1, 'system:dict:view');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (33, 2, '审计日志', 'C', '/system/operLog', 'System/OperLog', 'FileSearchOutlined', 5, 1, 'system:operlog:view');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (34, 6, '数据范围', 'C', '/dataRange', 'DataRange', 'FilterOutlined', 4, 1, 'dataRange:view');
+
+-- 字典管理与审计日志接口仅 SUPER_ADMIN 可用；数据范围需 SUPER_ADMIN/DEPT_ADMIN
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+  (1, 31), (1, 32), (1, 33), (1, 34),
+  (2, 31), (2, 34),
+  (3, 31),
+  (4, 31);
+
+-- ---------------------------------------------------------------------------
 -- 附件上传上限（必须先放开，否则 >1MB 的附件一律失败）
 --   1) Spring：spring.servlet.multipart.max-file-size / max-request-size
 --      —— 已在 backend/src/main/resources/application.yml 提供（默认 50MB/60MB）
