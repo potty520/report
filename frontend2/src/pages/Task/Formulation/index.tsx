@@ -28,7 +28,7 @@ const TaskFormulationPage: React.FC = () => {
   const loadTemplates = async () => {
     try {
       const res = await getTemplateListApi({ current: 1, size: 1000 });
-      setTemplates(res.data.data.records || []);
+      setTemplates(res.data.data.list || []);
     } catch { /* ignore */ }
   };
 
