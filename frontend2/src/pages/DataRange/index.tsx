@@ -139,7 +139,7 @@ const DataRangePage: React.FC = () => {
       title: '数据源', dataIndex: 'datasourceId', width: 160,
       render: (v) => {
         const hit = datasources.find((d) => d.id === v);
-        return hit ? `${hit.name}（${hit.type}）` : (v || '-');
+        return hit ? `${hit.dsName || hit.name || hit.id}（${hit.dsType || hit.type || '-'}）` : (v || '-');
       },
     },
     { title: 'SQL', dataIndex: 'sqlText', ellipsis: true, render: (v) => <code style={{ fontSize: 12 }}>{v || '-'}</code> },
@@ -228,7 +228,7 @@ const DataRangePage: React.FC = () => {
             </Col>
             <Col span={6}>
               <Form.Item name="datasourceId" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
-                <Select placeholder="选择数据源" options={datasources.map((d) => ({ value: d.id, label: `${d.name}（${d.type}）` }))} />
+                <Select placeholder="选择数据源" options={datasources.map((d) => ({ value: d.id, label: `${d.dsName || d.name || d.id}（${d.dsType || d.type || '-'}）` }))} />
               </Form.Item>
             </Col>
             <Col span={6}>
