@@ -221,6 +221,13 @@ public class CompatController {
         return Result.success(user);
     }
 
+    /** 角色下拉列表（兼容旧前端的 GET /role/all；否则会被 /role/{id} 吞掉报 NumberFormatException） */
+    @GetMapping("/role/all")
+    public Result<List<SysRole>> roleAll() {
+        return Result.success(sysRoleMapper.selectList(
+                Wrappers.<SysRole>lambdaQuery().orderByAsc(SysRole::getId)));
+    }
+
     /** 角色详情（前端 GET /role/{id}） */
     @GetMapping("/role/{id}")
     public Result<SysRole> roleById(@PathVariable Long id) {
