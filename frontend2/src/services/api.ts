@@ -576,20 +576,139 @@ export async function deleteProjectApi(id: number) {
 }
 
 // --- Template ---
+// 契约说明（重要）：后端 rpt_template 的字段是
+//   templateName / templateCode / fillingCycle / tableName / datasourceId / materialized
+// 而早期前端页面用的是 name / code / version；字段表后端为
+//   fieldName(中文名) / fieldCode(编码) / dbColumn(库列名) / isRequired
+// 早期前端用 fieldLabel / required。此处**在 API 层做双向归一化**，
+// 页面无需改动即可正确读写（读：补出 name/code/fieldLabel/required；写：还原成后端字段名）。
+type AnyRec = Record<string, any>;
+
+/** 后端模板 → 前端视图模型 */
+export function normalizeTemplate(row: AnyRec): AnyRec {
+  if (!row) return row;
+  const out: AnyRec = { ...row };
+  out.name = row.name ?? row.templateName;
+  out.code = row.code ?? row.templateCode;
+  out.templateName = row.templateName ?? row.name;
+  out.templateCode = row.templateCode ?? row.code;
+  out.excelFileName = row.excelFileName ?? row.fileName;
+  if (Array.isArray(row.fields)) out.fields = row.fields.map(normalizeTemplateField);
+  return out;
+}
+
+/** 后端字段 → 前端视图模型 */
+export function normalizeTemplateField(f: AnyRec): AnyRec {
+  if (!f) return f;
+  const out: AnyRec = { ...f };
+  out.fieldLabel = f.fieldLabel ?? f.fieldName;
+  out.dbColumn = f.dbColumn ?? f.fieldCode;
+  out.required = f.required ?? f.isRequired ?? 0;
+  out.isRequired = f.isRequired ?? f.required ?? 0;
+  return out;
+}
+
+/** 前端字段 → 后端字段 */
+export function denormalizeTemplateField(f: TemplateSaveField): AnyRec {
+  const out: AnyRec = {
+    fieldName: f.fieldName ?? f.fieldLabel,
+    fieldCode: f.fieldCode ?? f.dbColumn ?? f.fieldName,
+    dbColumn: f.dbColumn ?? f.fieldCode ?? f.fieldName,
+    fieldType: f.fieldType ?? 'VARCHAR',
+    fieldLength: f.fieldLength ?? 255,
+    isRequired: f.isRequired ?? f.required ?? 0,
+    isKey: f.isKey ?? 0,
+    excelColumn: f.excelColumn ?? '',
+    sort: f.sort ?? 0,
+  };
+  if (f.id !== undefined) out.id = f.id;
+  return out;
+}
+
+/** 前端模板 → 后端模板（兼容新旧两种命名） */
+export function denormalizeTemplate(data: TemplateSaveParams): AnyRec {
+  const out: AnyRec = {};
+  if (data.id !== undefined) out.id = data.id;
+  out.templateName = data.templateName ?? data.name;
+  out.templateCode = data.templateCode ?? data.code;
+  if (data.fillingCycle !== undefined) out.fillingCycle = data.fillingCycle;
+  if (data.deptId !== undefined) out.deptId = data.deptId;
+  if (data.projectId !== undefined) out.projectId = data.projectId;
+  if (data.tableName !== undefined) out.tableName = data.tableName;
+  if (data.datasourceId !== undefined) out.datasourceId = data.datasourceId;
+  if (data.description !== undefined) out.description = data.description;
+  if (data.status !== undefined) out.status = data.status;
+  if (Array.isArray(data.fields)) out.fields = data.fields.map(denormalizeTemplateField);
+  return out;
+}
+
+export interface TemplateSaveField {
+  id?: number;
+  fieldName?: string;
+  fieldLabel?: string;
+  fieldCode?: string;
+  dbColumn?: string;
+  fieldType?: string;
+  fieldLength?: number;
+  isRequired?: number;
+  required?: number;
+  isKey?: number;
+  excelColumn?: string;
+  sort?: number;
+}
+
+/** 新建/更新模板的入参：新旧命名都接受 */
+export interface TemplateSaveParams {
+  id?: number;
+  templateName?: string;
+  templateCode?: string;
+  name?: string;
+  code?: string;
+  fillingCycle?: number;
+  deptId?: number;
+  projectId?: number;
+  tableName?: string;
+  datasourceId?: number;
+  description?: string;
+  status?: number;
+  fields?: TemplateSaveField[];
+}
+
 export async function getTemplateListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<TemplateItem>>>('/template/page', { params });
+  const res = await request.get<ApiResponse<PageResult<TemplateItem>>>('/template/page', { params });
+  const page = res.data.data as unknown as AnyRec;
+  if (page && Array.isArray(page.list)) {
+    page.list = page.list.map(normalizeTemplate);
+  }
+  return res;
 }
 
 export async function getTemplateDetailApi(id: number) {
-  return request.get<ApiResponse<TemplateItem>>(`/template/${id}`);
+  const res = await request.get<ApiResponse<TemplateItem>>(`/template/${id}`);
+  const data = res.data.data as unknown as AnyRec;
+  if (data) {
+    res.data.data = normalizeTemplate(data) as unknown as TemplateItem;
+  }
+  return res;
 }
 
-export async function createTemplateApi(data: TemplateFormParams) {
-  return request.post<ApiResponse<null>>('/template', data);
+export async function getTemplateFieldsApi(id: number) {
+  const res = await request.get<ApiResponse<TemplateField[]>>(`/template/${id}/fields`);
+  const list = res.data.data as unknown as AnyRec[];
+  if (Array.isArray(list)) {
+    res.data.data = list.map(normalizeTemplateField) as unknown as TemplateField[];
+  }
+  return res;
 }
 
-export async function updateTemplateApi(data: TemplateFormParams) {
-  return request.put<ApiResponse<null>>(`/template/${data.id}`, data);
+export async function createTemplateApi(data: TemplateSaveParams) {
+  // 后端返回新建模板的主键 id（便于随后物化/下载）
+  return request.post<ApiResponse<number>>('/template', denormalizeTemplate(data));
+}
+
+export async function updateTemplateApi(data: TemplateSaveParams) {
+  // 后端是 PUT /template（id 在 body 里），不是 PUT /template/{id}
+  return request.put<ApiResponse<null>>('/template', denormalizeTemplate(data));
 }
 
 export async function deleteTemplateApi(id: number) {
@@ -597,21 +716,61 @@ export async function deleteTemplateApi(id: number) {
 }
 
 export async function updateTemplateStatusApi(id: number, status: number) {
-  return request.put<ApiResponse<null>>(`/template/${id}/status`, { status });
+  // 后端取 @RequestParam status，不是 body
+  return request.put<ApiResponse<null>>(`/template/${id}/status`, {}, { params: { status } });
 }
 
-export async function uploadTemplateExcelApi(templateId: number, formData: FormData) {
-  return request.post<ApiResponse<null>>(`/template/${templateId}/upload-excel`, formData, {
+export async function saveTemplateFieldsApi(id: number, fields: TemplateSaveField[]) {
+  return request.post<ApiResponse<null>>(`/template/${id}/fields`, fields.map(denormalizeTemplateField));
+}
+
+/** 解析 Excel 表头 → 推荐字段（5 步向导第 1 步） */
+export async function parseTemplateExcelApi(file: File, headerRowIndex = 0) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('headerRowIndex', String(headerRowIndex));
+  return request.post<ApiResponse<{ headers: string[]; fieldCount: number; fields: AnyRec[] }>>(
+    '/template/parse-excel',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+}
+
+/** 物化：按模板字段在目标业务库建表（5 步向导第 4/5 步） */
+export async function materializeTemplateApi(id: number, recreate = false) {
+  return request.post<ApiResponse<{ templateId: number; tableName: string; datasourceId: number }>>(
+    `/template/${id}/materialize`,
+    {},
+    { params: { recreate } },
+  );
+}
+
+/** 发布/部署模板（datasourceId / tableName 可选） */
+export async function deployTemplateApi(id: number, datasourceId?: number, tableName?: string) {
+  return request.post<ApiResponse<null>>(`/template/${id}/deploy`, {}, { params: { datasourceId, tableName } });
+}
+
+export async function downloadTemplateApi(id: number) {
+  return request.get(`/template/${id}/download`, { responseType: 'blob' });
+}
+
+/** @deprecated 后端没有该端点（原前端调 /template/{id}/upload-excel 会 404）；请用 parseTemplateExcelApi */
+export async function uploadTemplateExcelApi(_templateId: number, formData: FormData) {
+  return request.post<ApiResponse<null>>('/template/parse-excel', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 }
 
 export async function submitTemplateApi(id: number) {
-  return request.post<ApiResponse<null>>(`/template/${id}/submit`);
+  // 后端没有 /submit，发布对应 POST /template/{id}/deploy
+  return request.post<ApiResponse<null>>(`/template/${id}/deploy`);
 }
 
 export async function auditTemplateApi(id: number, status: number, remark?: string) {
-  return request.post<ApiResponse<null>>(`/template/${id}/audit`, { status, remark });
+  // 后端取 @RequestParam auditStatus / auditComment，且方法为 PUT
+  return request.put<ApiResponse<null>>(`/template/${id}/audit`, {}, {
+    params: { auditStatus: status, auditComment: remark },
+  });
 }
 
 // --- Datasource ---
