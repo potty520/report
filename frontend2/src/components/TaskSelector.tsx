@@ -58,7 +58,7 @@ const TaskSelector: React.FC<TaskSelectorProps> = ({
       value={value}
       optionFilterProp="label"
       onChange={(v) => onChange(v)}
-      options={tasks.map((t) => ({ value: t.id, label: `#${t.id} ${t.name}` }))}
+      options={tasks.map((t) => ({ value: t.id, label: `#${t.id} ${t.taskName || t.name || ''}` }))}
     />
   );
 };

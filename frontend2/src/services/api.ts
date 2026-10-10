@@ -247,6 +247,9 @@ export interface TemplateFormParams {
 
 // ==================== Datasource ====================
 export interface DatasourceItem {
+  /** 后端 rpt_datasource 的真实字段名（dsName/dsType）；name/type 由 API 层归一化补出 */
+  dsName?: string;
+  dsType?: string;
   id: number;
   name: string;
   type: string; // mysql/postgresql/sqlserver
@@ -279,6 +282,8 @@ export interface TestConnectionResult {
 
 // ==================== Task ====================
 export interface TaskItem {
+  /** 后端 rpt_task 的真实字段名；name 由 API 层归一化补出 */
+  taskName?: string;
   id: number;
   name: string;
   templateId: number;
@@ -775,7 +780,19 @@ export async function auditTemplateApi(id: number, status: number, remark?: stri
 
 // --- Datasource ---
 export async function getDatasourceListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<DatasourceItem>>>('/datasource/page', { params });
+  const res = await request.get<ApiResponse<PageResult<DatasourceItem>>>('/datasource/page', { params });
+  // 归一化：后端是 dsName/dsType，早期页面按 name/type 读 → 这里双向补全，避免下拉显示 undefined
+  const page = res.data.data as unknown as Record<string, any>;
+  if (page && Array.isArray(page.list)) {
+    page.list = page.list.map((d: Record<string, any>) => ({
+      ...d,
+      name: d.name ?? d.dsName,
+      type: d.type ?? d.dsType,
+      dsName: d.dsName ?? d.name,
+      dsType: d.dsType ?? d.type,
+    }));
+  }
+  return res;
 }
 
 export async function getDatasourceDetailApi(id: number) {
@@ -807,7 +824,17 @@ export async function testDatasourceConnectionApi(data: DatasourceFormParams) {
 
 // --- Task ---
 export async function getTaskListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<TaskItem>>>('/task/page', { params });
+  const res = await request.get<ApiResponse<PageResult<TaskItem>>>('/task/page', { params });
+  // 归一化：后端是 taskName，早期页面按 name 读 → 补 name，避免下拉显示 "undefined"
+  const page = res.data.data as unknown as Record<string, any>;
+  if (page && Array.isArray(page.list)) {
+    page.list = page.list.map((x: Record<string, any>) => ({
+      ...x,
+      name: x.name ?? x.taskName,
+      taskName: x.taskName ?? x.name,
+    }));
+  }
+  return res;
 }
 
 export async function getTaskDetailApi(id: number) {
