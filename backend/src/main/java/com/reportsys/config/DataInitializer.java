@@ -98,42 +98,17 @@ public class DataInitializer implements CommandLineRunner {
         jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (23, 22, '我的任务', 'C', '/fill/task', 'Fill/Task', 'carry-out', 1, 1, 'fill:task')");
         jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (24, 22, '数据审核', 'C', '/fill/audit', 'Fill/Audit', 'safety', 2, 1, 'fill:audit')");
 
-        // 审核管理（P0-C：双通道审核 / 流转轨迹 / 补正）
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (25, 0, '审核管理', 'M', '/audit', null, 'AuditOutlined', 9, 1, null)");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (26, 25, '部门审核', 'C', '/audit/dept-audit', 'Audit/DeptAudit', 'AuditOutlined', 1, 1, 'audit:dept')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (27, 25, '任务方审核', 'C', '/audit/task-audit', 'Audit/TaskAudit', 'SafetyCertificateOutlined', 2, 1, 'audit:task')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (28, 25, '流转轨迹', 'C', '/audit/trajectory', 'Audit/Trajectory', 'NodeIndexOutlined', 3, 1, 'audit:trajectory')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (29, 25, '补正管理', 'C', '/audit/correct', 'Audit/Correct', 'ToolOutlined', 4, 1, 'audit:correct')");
+        // 2026-10 新增界面（审核管理 / 附件管理 / 消息中心 / 字典管理 / 审计日志 / 数据范围 /
+        // 在线用户 / 统计规则）的菜单与角色授权，统一以 docs/report_2.0_upgrade4_audit_menus.sql 为准。
+        //
+        // ⚠️ 不要在这里补菜单：线上 sys_menu 的 id 空间与本文件的种子 id **不一致**
+        //    （例：线上 7=填报管理、22=角色管理；而本文件 22=填报审核）。
+        //    历史上曾因此把「附件管理」挂到了「角色管理」下面。
+        //    新增菜单请改迁移脚本，并显式给出唯一 menu_code
+        //    （sys_menu.menu_code 有唯一键且默认 ''，不给值会从第二条起被 INSERT IGNORE 静默跳过）。
 
-        // 附件管理（P1-D：分片上传 / 秒传 / 断点续传 / 下载）
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (30, 22, '附件管理', 'C', '/file/list', 'File/List', 'PaperClipOutlined', 3, 1, 'file:list')");
-
-        // P1-F / P2-G：消息中心 / 字典管理 / 审计日志 / 数据范围
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (31, 0, '消息中心', 'C', '/todo', 'Todo', 'BellOutlined', 10, 1, 'todo:list')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (32, 2, '字典管理', 'C', '/system/dict', 'System/Dict', 'BookOutlined', 4, 1, 'system:dict:view')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (33, 2, '审计日志', 'C', '/system/operLog', 'System/OperLog', 'FileSearchOutlined', 5, 1, 'system:operlog:view')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (34, 6, '数据范围', 'C', '/dataRange', 'DataRange', 'FilterOutlined', 4, 1, 'dataRange:view')");
-
-        // 在线用户 / 统计规则（第 4 批）
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (35, 2, '在线用户', 'C', '/system/online', 'System/OnlineUser', 'WifiOutlined', 6, 1, 'system:online:view')");
-        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (36, 2, '统计规则', 'C', '/system/statisticsRule', 'System/StatisticsRule', 'SlidersOutlined', 7, 1, 'system:rule:view')");
-
-        // Assign all menus to admin role
-        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 8),(1, 9),(1, 10),(1, 11),(1, 12),(1, 13),(1, 14),(1, 15),(1, 16),(1, 17),(1, 18),(1, 19),(1, 20),(1, 21),(1, 22),(1, 23),(1, 24),(1, 25),(1, 26),(1, 27),(1, 28),(1, 29),(1, 30),(1, 31),(1, 32),(1, 33),(1, 34),(1, 35),(1, 36)");
-
-        // 部门管理员（DEPT_ADMIN）：除「系统管理」外的业务菜单。
-        // 原先该角色没有任何菜单授权，导致 user/***REMOVED_DEFAULT_USER_PASSWORD*** 登录后侧边栏为空。
-        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES "
-                + "(2, 1),(2, 8),(2, 9),(2, 10),(2, 11),(2, 12),(2, 13),(2, 14),"
-                + "(2, 15),(2, 16),(2, 17),(2, 18),(2, 19),(2, 20),(2, 21),"
-                + "(2, 22),(2, 23),(2, 24),(2, 25),(2, 26),(2, 27),(2, 28),(2, 29),(2, 30),(2, 31),(2, 34)");
-
-        // 审核人（AUDIT_USER）：审核管理全部 + 填报审核 + 消息中心
-        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES "
-                + "(4, 22),(4, 23),(4, 24),(4, 25),(4, 26),(4, 27),(4, 28),(4, 29),(4, 31)");
-
-        // 填报人（FILL_USER）：我的任务 + 附件管理 + 消息中心
-        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (3, 30),(3, 31)");
+        // Assign all menus to admin role（仅种子内置菜单；新增菜单的授权见迁移脚本）
+        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 8),(1, 9),(1, 10),(1, 11),(1, 12),(1, 13),(1, 14),(1, 15),(1, 16),(1, 17),(1, 18),(1, 19),(1, 20),(1, 21),(1, 22),(1, 23),(1, 24)");
 
         System.out.println("=== Initial data inserted successfully ===");
     }
