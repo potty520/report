@@ -74,6 +74,25 @@ public class OnlineUserService {
         return out;
     }
 
+    /**
+     * 登出：把该会话置为离线。
+     * 之后 JwtAuthFilter.isKicked(sessionId) 即为 true，登出后的 token 立刻返回 401
+     * （修复"登出后 token 仍可用"的安全问题）。
+     */
+    public int logout(String sessionId) {
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return 0;
+        }
+        try {
+            return jdbcTemplate.update(
+                    "UPDATE rpt_online_user SET status = 0, offline_reason = '用户登出', offline_time = NOW() "
+                            + "WHERE session_id = ? AND status = 1", sessionId);
+        } catch (Exception e) {
+            log.warn("登出清理在线会话失败: {}", e.getMessage());
+            return 0;
+        }
+    }
+
     /** 在线用户列表 */
     public List<Map<String, Object>> list(String keyword) {
         try {
