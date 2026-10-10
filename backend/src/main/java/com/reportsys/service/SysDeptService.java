@@ -75,8 +75,30 @@ public class SysDeptService {
                 Wrappers.<SysDept>lambdaQuery().eq(SysDept::getStatus, 1).orderByAsc(SysDept::getSort));
     }
 
+
+    /** 生成唯一部门编码：D + 6 位序号（跳过已占用） */
+    private String generateDeptCode() {
+        for (int i = 1; i <= 9999; i++) {
+            String code = String.format("D%06d", i);
+            Long n = sysDeptMapper.selectCount(
+                    com.baomidou.mybatisplus.core.toolkit.Wrappers.<SysDept>lambdaQuery()
+                            .eq(SysDept::getDeptCode, code));
+            if (n == null || n == 0) {
+                return code;
+            }
+        }
+        return "D" + (System.currentTimeMillis() % 1000000);
+    }
+
     @Transactional
     public void add(SysDept dept) {
+        // 缺陷修复：sys_dept.dept_code 为 NOT NULL 且无默认值，而新增弹窗原本没有"部门编码"项，
+        // 导致新增部门必然报 Field 'dept_code' doesn't have a default value。
+        // 这里做兜底：为空则自动生成唯一编码；同时给前端保留显式指定的能力。
+        if (dept.getDeptCode() == null || dept.getDeptCode().trim().isEmpty()) {
+            dept.setDeptCode(generateDeptCode());
+        }
+        dept.setDeptCode(dept.getDeptCode().trim());
         SysDept exist = sysDeptMapper.selectOne(
                 Wrappers.<SysDept>lambdaQuery().eq(SysDept::getDeptCode, dept.getDeptCode()));
         if (exist != null) throw new RuntimeException("部门编码已存在");
