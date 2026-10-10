@@ -20,8 +20,19 @@ const DictPage: React.FC = () => {
   const load = useCallback(async (type?: string) => {
     setLoading(true);
     try {
-      const res = await getDictManageApi(type);
-      setList(res.data.data || []);
+      if (type) {
+        const res = await getDictManageApi(type);
+        setList(res.data.data || []);
+      } else {
+        // 不传类型时走 /dict/all（分组返回）并摊平。
+        // 注意：不能调用 /dict/manage/（空路径变量）——那会被 Spring 匹配到 /dict/{dictType}，
+        // 把 "manage" 当成字典类型查询，结果恒为空。
+        const res = await getDictAllApi();
+        const grouped = res.data.data || {};
+        const flat: DictItem[] = [];
+        Object.keys(grouped).forEach((k) => { (grouped[k] || []).forEach((item) => flat.push(item)); });
+        setList(flat);
+      }
     } catch (e: any) {
       msg.error(e?.message || '查询失败（字典管理仅超级管理员可用）');
       setList([]);
