@@ -72,3 +72,82 @@ CREATE TABLE IF NOT EXISTS rpt_quality_report (
 -- 校验
 -- SELECT * FROM rpt_sms_log ORDER BY id DESC LIMIT 10;
 -- SELECT * FROM rpt_quality_report ORDER BY id DESC LIMIT 10;
+
+-- ---------------------------------------------------------------------------
+-- 统计/提醒规则配置（对应原版 statistics_rule_config）
+--   grace_days  超期宽限天数（默认 0 = 与原行为一致）
+--   remind_days 提前提醒天数（默认 0 = 不提前提醒）
+--   enabled     是否启用；未启用时业务按默认值处理
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS rpt_statistics_rule (
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  rule_code   VARCHAR(64)  NOT NULL COMMENT '规则编码',
+  rule_name   VARCHAR(128) DEFAULT NULL,
+  grace_days  INT          DEFAULT 0 COMMENT '超期宽限天数',
+  remind_days INT          DEFAULT 0 COMMENT '提前提醒天数',
+  enabled     TINYINT      DEFAULT 1,
+  remark      VARCHAR(500) DEFAULT NULL,
+  create_time DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_statistics_rule_code (rule_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统计/提醒规则配置';
+
+-- 默认规则：grace_days=0 保证与配置前行为一致（不改变任何统计口径）
+INSERT IGNORE INTO rpt_statistics_rule (rule_code, rule_name, grace_days, remind_days, enabled, remark)
+VALUES ('OVERDUE_REMIND', '超期提醒', 0, 0, 1, '默认宽限 0 天，与原行为一致；把 grace_days 调大即延后判定超期'),
+       ('TODO_REMIND', '待办提醒', 0, 0, 0, 'remind_days>0 时到期前 N 天提醒（当前未启用）'),
+       ('CORRECT_REMIND', '补正提醒', 0, 0, 0, '补正流程提醒（当前未启用）');
+
+-- 校验
+-- SELECT rule_code, grace_days, remind_days, enabled FROM rpt_statistics_rule;
+-- 生效值接口：GET /api/statistics-rule/effective
+
+-- ---------------------------------------------------------------------------
+-- 分卷附件（对应原版 report_volume_file / 分卷与非分卷附件）
+--   每个卷本身仍存 rpt_file（含秒传/去重），本表只记录「卷号 → 文件」归属，
+--   成组下载时按 volume_index 顺序打包为 zip。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS rpt_volume_file (
+  id           BIGINT   NOT NULL AUTO_INCREMENT,
+  group_key    VARCHAR(128) NOT NULL COMMENT '分卷组标识',
+  volume_index INT      NOT NULL DEFAULT 0 COMMENT '卷号（从 0 开始）',
+  file_id      BIGINT   NOT NULL COMMENT 'rpt_file.id',
+  task_id      BIGINT   DEFAULT NULL,
+  create_by    BIGINT   DEFAULT NULL,
+  create_time  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_volume_group_index (group_key, volume_index),
+  KEY idx_volume_task (task_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分卷附件归属（多卷成组）';
+
+-- 校验
+-- SELECT group_key, volume_index, file_id, task_id FROM rpt_volume_file ORDER BY group_key, volume_index;
+-- 列表接口：GET /api/file/volume/list?taskId=1
+-- 打包下载：GET /api/file/volume/{groupKey}/download
+
+-- ---------------------------------------------------------------------------
+-- 在线用户与异地登录检测（对应原版 online_user_info_t / 踢下线）
+--   session_id 取自 JWT 的 jti；status=0 表示被管理员踢下线，
+--   JwtAuthFilter 会对该会话直接返回 HTTP 401。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS rpt_online_user (
+  id               BIGINT       NOT NULL AUTO_INCREMENT,
+  user_id          BIGINT       NOT NULL,
+  username         VARCHAR(64)  DEFAULT NULL,
+  session_id       VARCHAR(64)  DEFAULT NULL COMMENT 'JWT jti',
+  ip               VARCHAR(64)  DEFAULT NULL,
+  user_agent       VARCHAR(300) DEFAULT NULL,
+  login_time       DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  last_active_time DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  status           TINYINT      DEFAULT 1 COMMENT '1=在线 0=已下线/被踢',
+  offline_reason   VARCHAR(200) DEFAULT NULL,
+  offline_time     DATETIME     DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_online_user (user_id, status),
+  KEY idx_online_session (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='在线用户会话';
+
+-- 校验
+-- SELECT user_id, username, ip, login_time, status FROM rpt_online_user WHERE status = 1 ORDER BY login_time DESC;
+-- 列表接口：GET /api/online/list ；踢下线：POST /api/online/kick?sessionId=xxx
