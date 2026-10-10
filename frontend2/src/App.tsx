@@ -56,6 +56,8 @@ const Todo = lazy(() => import('@/pages/Todo'));
 const Dict = lazy(() => import('@/pages/System/Dict'));
 const OperLog = lazy(() => import('@/pages/System/OperLog'));
 const DataRange = lazy(() => import('@/pages/DataRange'));
+const OnlineUser = lazy(() => import('@/pages/System/OnlineUser'));
+const StatisticsRule = lazy(() => import('@/pages/System/StatisticsRule'));
 
 const App: React.FC = () => {
   const { token, initialize } = useAuthStore();
@@ -128,6 +130,8 @@ const App: React.FC = () => {
               <Route path="todo" element={<Todo />} />
               <Route path="system/dict" element={<Dict />} />
               <Route path="system/operLog" element={<OperLog />} />
+              <Route path="system/online" element={<OnlineUser />} />
+              <Route path="system/statisticsRule" element={<StatisticsRule />} />
               <Route path="dataRange" element={<DataRange />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

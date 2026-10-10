@@ -59,6 +59,16 @@ INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
   (4, 31);
 
 -- ---------------------------------------------------------------------------
+-- 在线用户 / 统计规则（接口均仅 SUPER_ADMIN 可用）
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (35, 2, '在线用户', 'C', '/system/online', 'System/OnlineUser', 'WifiOutlined', 6, 1, 'system:online:view');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (36, 2, '统计规则', 'C', '/system/statisticsRule', 'System/StatisticsRule', 'SlidersOutlined', 7, 1, 'system:rule:view');
+
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 35), (1, 36);
+
+-- ---------------------------------------------------------------------------
 -- 附件上传上限（必须先放开，否则 >1MB 的附件一律失败）
 --   1) Spring：spring.servlet.multipart.max-file-size / max-request-size
 --      —— 已在 backend/src/main/resources/application.yml 提供（默认 50MB/60MB）
