@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert, Button, Card, Descriptions, Divider, Form, Input, InputNumber, Result,
   Select, Space, Steps, Switch, Table, Tag, Upload, message,
@@ -10,8 +10,8 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  createTemplateApi, getDatasourceListApi, materializeTemplateApi, parseTemplateExcelApi,
-  updateTemplateStatusApi,
+  createTemplateApi, getDatasourceListApi, getTemplateDetailApi, materializeTemplateApi,
+  parseTemplateExcelApi, saveTemplateFieldsApi, updateTemplateApi, updateTemplateStatusApi,
   type TemplateSaveField,
 } from '@/services/api';
 
@@ -58,6 +58,8 @@ function emptyField(index: number): WizardField {
 
 export default function TemplateWizard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = Number(searchParams.get('id') || 0) || 0;
   const [current, setCurrent] = useState(0);
   const [fields, setFields] = useState<WizardField[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -82,6 +84,41 @@ export default function TemplateWizard() {
       })
       .catch(() => setDatasourceList([]));
   }, []);
+
+  // 编辑模式：按 ?id= 载入已有模板与字段回填
+  useEffect(() => {
+    if (!editId) return;
+    getTemplateDetailApi(editId)
+      .then((res: any) => {
+        const t = res?.data?.data || {};
+        setInfo({
+          templateName: t.templateName || t.name || '',
+          templateCode: t.templateCode || t.code || '',
+          fillingCycle: Number(t.fillingCycle ?? 1),
+          description: t.description || '',
+        });
+        setMaterialize({
+          datasourceId: t.datasourceId,
+          tableName: t.tableName || '',
+          doIt: false,
+          recreate: false,
+        });
+        const fs2: Array<Record<string, any>> = t.fields || [];
+        setFields(fs2.map((f, i) => ({
+          key: nextKey(),
+          fieldName: String(f.fieldName ?? f.fieldLabel ?? ''),
+          fieldCode: String(f.fieldCode ?? `f${i + 1}`),
+          dbColumn: String(f.dbColumn ?? f.fieldCode ?? `f${i + 1}`),
+          fieldType: String(f.fieldType ?? 'VARCHAR'),
+          fieldLength: Number(f.fieldLength ?? 255),
+          isRequired: Number(f.isRequired ?? f.required ?? 0),
+          isKey: Number(f.isKey ?? 0),
+          excelColumn: String(f.excelColumn ?? ''),
+          sort: i,
+        })));
+      })
+      .catch((e: any) => message.error(e?.message || '加载模板失败'));
+  }, [editId]);
 
   const patchField = useCallback((key: string, patch: Partial<WizardField>) => {
     setFields((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
@@ -212,10 +249,18 @@ export default function TemplateWizard() {
           sort: f.sort,
         })) as TemplateSaveField[],
       };
-      const res: any = await createTemplateApi(payload);
-      const newId = Number(res?.data?.data ?? 0);
-      if (!newId) {
-        throw new Error(res?.data?.msg || '模板创建未返回主键');
+      let newId = 0;
+      if (editId) {
+        // 编辑模式：更新模板基本信息 + 覆盖字段
+        await updateTemplateApi({ ...payload, id: editId });
+        await saveTemplateFieldsApi(editId, payload.fields as TemplateSaveField[]);
+        newId = editId;
+      } else {
+        const res: any = await createTemplateApi(payload);
+        newId = Number(res?.data?.data ?? 0);
+        if (!newId) {
+          throw new Error(res?.data?.msg || '模板创建未返回主键');
+        }
       }
       let tableName = '';
       if (materialize.doIt) {
@@ -233,7 +278,7 @@ export default function TemplateWizard() {
         }
       }
       setDone({ id: newId, tableName, published });
-      message.success(materialize.doIt ? '模板创建并物化成功' : '模板创建成功');
+      message.success(editId ? '模板已更新' : (materialize.doIt ? '模板创建并物化成功' : '模板创建成功'));
     } catch (e: any) {
       message.error(e?.message || '创建失败');
     } finally {
@@ -519,7 +564,7 @@ export default function TemplateWizard() {
   ];
 
   return (
-    <Card title="模板向导（5 步）" extra={<Button onClick={() => navigate('/template/list')}>返回列表</Button>}>
+    <Card title={editId ? `编辑模板（向导）#${editId}` : '模板向导（5 步）'} extra={<Button onClick={() => navigate('/template/list')}>返回列表</Button>}>
       <Steps current={current} items={steps.map((s) => ({ title: s.title }))} style={{ marginBottom: 24 }} />
       <div style={{ minHeight: 320 }}>{steps[current].content}</div>
       <Divider />

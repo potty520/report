@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/audit")
+@RequestMapping({"/audit", "/fill/audit"})
 @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','AUDIT_USER')")
 public class AuditController {
 
@@ -27,7 +27,7 @@ public class AuditController {
     /**
      * 我的审核任务列表(分页)
      */
-    @GetMapping("/myTasks")
+    @GetMapping({"/myTasks", "/page"})
     public Result<PageResult<RptTaskData>> myTasks(@RequestParam(defaultValue = "1") int page,
                                                      @RequestParam(defaultValue = "10") int pageSize,
                                                      @RequestParam(required = false) Integer auditStatus) {
@@ -128,7 +128,7 @@ public class AuditController {
     /**
      * 部门审核（双通道第一级，P0-C）
      */
-    @PostMapping("/dept-audit")
+    @PostMapping({"/dept-audit", "/submit"})
     @OperLog(module = "填报审核", action = "部门审核")
     public Result<Void> deptAudit(@RequestParam Long taskDataId,
                                    @RequestParam boolean pass,

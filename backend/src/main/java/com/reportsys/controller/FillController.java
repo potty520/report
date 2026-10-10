@@ -121,7 +121,7 @@ public class FillController {
     /**
      * 保存草稿
      */
-    @PostMapping("/save")
+    @PostMapping({"/save", "/draft"})
     public Result<Void> saveDraft(@RequestParam Long taskId,
                                    @RequestParam String dataJson,
                                    @RequestParam(required = false) String fileUrl) {
