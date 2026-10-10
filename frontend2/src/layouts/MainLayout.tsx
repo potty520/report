@@ -26,10 +26,19 @@ const MainLayout: React.FC = () => {
   const { summary, fetchSummary } = useTodoStore();
 
   // 消息中心未读数：进入布局时拉一次，之后每 60 秒刷新
+  // 注意：布局卸载（退出登录/切到登录页）时清理定时器；在途请求由
+  // request 层的全局 abort 机制统一取消，避免响应传输中途被打断。
   useEffect(() => {
-    fetchSummary();
-    const timer = window.setInterval(() => { fetchSummary(); }, 60000);
-    return () => window.clearInterval(timer);
+    let alive = true;
+    const tick = () => {
+      if (alive) fetchSummary();
+    };
+    tick();
+    const timer = window.setInterval(tick, 60000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
   }, [fetchSummary]);
 
   const handleMenuCollapse = () => {

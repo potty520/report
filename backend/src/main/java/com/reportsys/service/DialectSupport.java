@@ -116,7 +116,8 @@ public final class DialectSupport {
                 return "DATE";
             case "DATETIME":
             case "TIMESTAMP":
-                return dialect == Dialect.ORACLE ? "TIMESTAMP" : "DATETIME";
+                // PostgreSQL 没有 DATETIME 类型（报 type "datetime" does not exist），必须用 TIMESTAMP
+                return (dialect == Dialect.MYSQL || dialect == Dialect.CIRRODATA) ? "DATETIME" : "TIMESTAMP";
             default:
                 if (dialect == Dialect.ORACLE) {
                     return len > 4000 ? "CLOB" : "VARCHAR2(" + len + ")";
