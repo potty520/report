@@ -38,6 +38,14 @@ public class RptTaskService {
      * 创建任务
      */
     @Transactional
+    /** 更新任务（原 PUT /task 误用 createTask，导致主键冲突、无法改任务） */
+    public void updateTask(RptTask task) {
+        if (task == null || task.getId() == null) {
+            throw new RuntimeException("任务ID不能为空");
+        }
+        rptTaskMapper.updateById(task);
+    }
+
     public void createTask(RptTask task) {
         RptTemplate template = rptTemplateMapper.selectById(task.getTemplateId());
         if (template == null) throw new RuntimeException("模板不存在");

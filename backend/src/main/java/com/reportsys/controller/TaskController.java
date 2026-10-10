@@ -77,7 +77,7 @@ public class TaskController {
             task.setCreateBy(exist.getCreateBy());
             task.setCreateTime(exist.getCreateTime());
             // 重新创建(Service的createTask)
-            rptTaskService.createTask(task);
+            rptTaskService.updateTask(task);
             return Result.success();
         } catch (AccessDeniedException e) {
             throw e;

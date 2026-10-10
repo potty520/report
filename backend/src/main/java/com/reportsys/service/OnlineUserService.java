@@ -94,7 +94,10 @@ public class OnlineUserService {
                             + "o.status, u.real_name AS realName, d.dept_name AS deptName "
                             + "FROM rpt_online_user o LEFT JOIN sys_user u ON u.id = o.user_id "
                             + "LEFT JOIN sys_dept d ON d.id = u.dept_id WHERE o.status = 1 "
-                    + "AND o.last_active_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE) ");
+                    + "AND o.last_active_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE) "
+                    // 按用户去重：每个用户只展示最近一次会话，口径与 onlineCount(DISTINCT user_id) 一致
+                    + "AND o.id = (SELECT MAX(x.id) FROM rpt_online_user x "
+                    + "WHERE x.user_id = o.user_id AND x.status = 1) ");
             List<Object> args = new ArrayList<>();
             if (StrUtil.isNotBlank(keyword)) {
                 sql.append(" AND (o.username LIKE ? OR o.ip LIKE ?) ");
