@@ -101,7 +101,17 @@ public class AuthController {
      * 退出
      */
     @PostMapping("/logout")
-    public Result<Void> logout() {
+    public Result<Void> logout(HttpServletRequest request) {
+        // 安全修复：登出即让该会话失效（JwtAuthFilter 随后拒绝这个 token），
+        // 否则登出后的 JWT 仍可继续调用接口。
+        Object sessionId = request.getAttribute("sessionId");
+        if (sessionId != null) {
+            try {
+                onlineUserService.logout(String.valueOf(sessionId));
+            } catch (Exception ignored) {
+                // 不影响登出响应
+            }
+        }
         return Result.success();
     }
 
