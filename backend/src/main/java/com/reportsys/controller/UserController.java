@@ -5,12 +5,15 @@ import com.reportsys.common.Result;
 import com.reportsys.model.SysUser;
 import com.reportsys.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/user")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class UserController {
 
     @Autowired
@@ -45,6 +48,8 @@ public class UserController {
         try {
             sysUserService.add(user);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -58,6 +63,8 @@ public class UserController {
         try {
             sysUserService.update(user);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -71,6 +78,8 @@ public class UserController {
         try {
             sysUserService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -89,6 +98,8 @@ public class UserController {
             user.setStatus(status);
             sysUserService.update(user);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -102,6 +113,8 @@ public class UserController {
         try {
             sysUserService.assignRoles(id, roleIds);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

@@ -4,12 +4,15 @@ import com.reportsys.common.Result;
 import com.reportsys.model.SysDept;
 import com.reportsys.service.SysDeptService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/dept")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
 public class DeptController {
 
     @Autowired
@@ -49,6 +52,8 @@ public class DeptController {
         try {
             sysDeptService.add(dept);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -62,6 +67,8 @@ public class DeptController {
         try {
             sysDeptService.update(dept);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -75,6 +82,8 @@ public class DeptController {
         try {
             sysDeptService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

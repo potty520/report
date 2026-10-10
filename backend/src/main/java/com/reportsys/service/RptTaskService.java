@@ -69,6 +69,12 @@ public class RptTaskService {
     public void assignTask(Long taskId, List<Long> fillUserIds, List<Long> auditUserIds) {
         RptTask task = rptTaskMapper.selectById(taskId);
         if (task == null) throw new RuntimeException("任务不存在");
+        boolean hasFill = fillUserIds != null && !fillUserIds.isEmpty();
+        boolean hasAudit = auditUserIds != null && !auditUserIds.isEmpty();
+        if (!hasFill && !hasAudit) {
+            // 避免"参数名传错导致静默分派失败还改状态"
+            throw new RuntimeException("请至少选择一个分派对象（userIds/deptIds 不能都为空）");
+        }
 
         // 删除原有分派
         rptTaskAssignMapper.delete(
@@ -109,6 +115,14 @@ public class RptTaskService {
         task.setStatus(2); // 填报中
         task.setUpdateTime(LocalDateTime.now());
         rptTaskMapper.updateById(task);
+        // P1-F：给被分派人发待办消息（替代原版短信通知）
+        try {
+            todoService.notifyAssignees(taskId, "【待办】" + task.getTaskName(),
+                    "任务已分派给你，请在 " + (task.getFillDeadline() == null ? "截止时间前" : task.getFillDeadline())
+                            + " 完成填报并提交。", "TODO", task.getCreateBy());
+        } catch (Exception ignored) {
+            // 通知失败不影响分派
+        }
     }
 
     /**
@@ -282,6 +296,28 @@ public class RptTaskService {
     }
 
     /**
+     * 按部门分派：把部门下的在职用户展开成分派人（原版支持按部门下发）
+     */
+    @Transactional
+    public void assignTaskByDepts(Long taskId, List<Long> deptIds, boolean audit) {
+        if (deptIds == null || deptIds.isEmpty()) {
+            throw new RuntimeException("请至少选择一个分派对象");
+        }
+        List<SysUser> users = sysUserMapper.selectList(Wrappers.<SysUser>lambdaQuery()
+                .in(SysUser::getDeptId, deptIds)
+                .eq(SysUser::getStatus, 1));
+        List<Long> userIds = users.stream().map(SysUser::getId).collect(Collectors.toList());
+        if (userIds.isEmpty()) {
+            throw new RuntimeException("所选部门下没有可用用户");
+        }
+        if (audit) {
+            assignTask(taskId, null, userIds);
+        } else {
+            assignTask(taskId, userIds, null);
+        }
+    }
+
+    /**
      * 获取任务已分派的用户
      */
     public List<RptTaskAssign> getAssigns(Long taskId, String assignType) {
@@ -289,5 +325,114 @@ public class RptTaskService {
                 Wrappers.<RptTaskAssign>lambdaQuery()
                         .eq(RptTaskAssign::getTaskId, taskId)
                         .eq(StrUtil.isNotBlank(assignType), RptTaskAssign::getAssignType, assignType));
+    }
+
+    // ========================================================================
+    // P0-C：周期任务自动生成（替代原版 TaskJob + SaveTaskService）
+    // ========================================================================
+
+    @Autowired
+    private PeriodService periodService;
+    @Autowired
+    private TodoService todoService;
+
+    /**
+     * 为周期主任务生成当前属期的部门子任务。
+     *
+     * @param parentTaskId 指定主任务；为 null 时处理所有已发布状态（1/2）的主任务
+     */
+    @Transactional
+    public Map<String, Object> generatePeriodicTasks(Long parentTaskId) {
+        List<RptTask> parents;
+        if (parentTaskId != null) {
+            RptTask parent = rptTaskMapper.selectById(parentTaskId);
+            if (parent == null) throw new RuntimeException("主任务不存在");
+            parents = Collections.singletonList(parent);
+        } else {
+            parents = rptTaskMapper.selectList(Wrappers.<RptTask>lambdaQuery()
+                    .isNull(RptTask::getParentTaskId)
+                    .in(RptTask::getStatus, 1, 2));
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int createdCount = 0;
+        String currentBatch = null;
+        List<String> details = new ArrayList<>();
+
+        for (RptTask parent : parents) {
+            Integer cycle = parent.getFillingCycle() == null ? PeriodService.MONTHLY : parent.getFillingCycle();
+            String batch = periodService.currentPeriod(cycle, java.time.LocalDate.now());
+            currentBatch = batch;
+
+            Long exists = rptTaskMapper.selectCount(Wrappers.<RptTask>lambdaQuery()
+                    .eq(RptTask::getParentTaskId, parent.getId())
+                    .eq(RptTask::getBelongTime, batch));
+            if (exists != null && exists > 0) {
+                details.add(parent.getTaskName() + ": 属期 " + batch + " 已生成，跳过");
+                continue;
+            }
+
+            // 涉及部门：优先取分派记录里的部门；没有分派则用主任务自身部门
+            List<RptTaskAssign> assigns = rptTaskAssignMapper.selectList(
+                    Wrappers.<RptTaskAssign>lambdaQuery()
+                            .eq(RptTaskAssign::getTaskId, parent.getId())
+                            .eq(RptTaskAssign::getAssignType, "FILL"));
+            Map<Long, List<RptTaskAssign>> byDept = new LinkedHashMap<>();
+            for (RptTaskAssign assign : assigns) {
+                Long deptId = assign.getDeptId() != null ? assign.getDeptId() : parent.getDeptId();
+                byDept.computeIfAbsent(deptId, k -> new ArrayList<>()).add(assign);
+            }
+            if (byDept.isEmpty()) {
+                byDept.put(parent.getDeptId(), new ArrayList<>());
+            }
+
+            int seq = 1;
+            for (Map.Entry<Long, List<RptTaskAssign>> entry : byDept.entrySet()) {
+                Long deptId = entry.getKey();
+                RptTask child = new RptTask();
+                child.setTaskName(parent.getTaskName() + "-" + periodService.deptCode(deptId) + "-" + seq);
+                child.setTemplateId(parent.getTemplateId());
+                child.setDeptId(deptId);
+                child.setProjectId(parent.getProjectId());
+                child.setBelongTime(batch);
+                child.setGenerateBatch(batch);
+                child.setFillingCycle(cycle);
+                child.setStatus(2); // 填报中
+                child.setParentTaskId(parent.getId());
+                child.setFillDeadline(periodService.fillDeadline(cycle, java.time.LocalDate.now()));
+                child.setAuditDeadline(periodService.auditDeadline(cycle, java.time.LocalDate.now(), 2));
+                child.setCreateBy(parent.getCreateBy());
+                child.setCreateTime(now);
+                child.setUpdateTime(now);
+                rptTaskMapper.insert(child);
+
+                for (RptTaskAssign assign : entry.getValue()) {
+                    RptTaskAssign copy = new RptTaskAssign();
+                    copy.setTaskId(child.getId());
+                    copy.setDeptId(assign.getDeptId());
+                    copy.setUserId(assign.getUserId());
+                    copy.setAssignType(assign.getAssignType());
+                    copy.setStatus(0);
+                    copy.setCreateTime(now);
+                    rptTaskAssignMapper.insert(copy);
+                }
+                createdCount++;
+                seq++;
+            }
+            details.add(parent.getTaskName() + ": 生成 " + (seq - 1) + " 个子任务（属期 " + batch + "）");
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("batch", currentBatch);
+        result.put("createdCount", createdCount);
+        result.put("detail", String.join("; ", details));
+        return result;
+    }
+
+    /** 子任务列表 */
+    public List<RptTask> listChildren(Long parentTaskId) {
+        return rptTaskMapper.selectList(Wrappers.<RptTask>lambdaQuery()
+                .eq(RptTask::getParentTaskId, parentTaskId)
+                .orderByDesc(RptTask::getCreateTime));
     }
 }

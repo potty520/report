@@ -31,3 +31,6 @@ logs/
 # Temp
 /tmp/
 *.tmp
+
+# TS build cache
+frontend2/tsconfig.tsbuildinfo

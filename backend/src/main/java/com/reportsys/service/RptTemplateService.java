@@ -12,8 +12,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class RptTemplateService {
@@ -30,6 +35,112 @@ public class RptTemplateService {
     private RptDatasourceMapper rptDatasourceMapper;
     @Autowired
     private SysUserMapper sysUserMapper;
+    @Autowired
+    private MaterializeService materializeService;
+    @Autowired
+    private ExcelService excelService;
+
+    /**
+     * 解析上传的 Excel 模板表头，返回可用的字段建议（不入库）
+     */
+    public Map<String, Object> parseTemplateExcel(InputStream in, int headerRowIndex) {
+        List<String> headers = excelService.parseHeader(in, headerRowIndex);
+        List<Map<String, Object>> suggestions = new ArrayList<>();
+        int index = 1;
+        for (String header : headers) {
+            Map<String, Object> field = new LinkedHashMap<>();
+            field.put("fieldName", header);
+            field.put("fieldCode", "f" + index);
+            field.put("dbColumn", "f" + index);
+            field.put("fieldType", guessFieldType(header));
+            field.put("fieldLength", 255);
+            field.put("isRequired", 0);
+            field.put("isKey", index == 1 ? 1 : 0);
+            field.put("excelColumn", excelColumnName(index - 1));
+            suggestions.add(field);
+            index++;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("headers", headers);
+        result.put("fieldCount", headers.size());
+        result.put("fields", suggestions);
+        return result;
+    }
+
+    /**
+     * 物化：按模板字段在目标业务库建表
+     */
+    @Transactional
+    public Map<String, Object> materialize(Long id, boolean recreate) {
+        RptTemplate template = rptTemplateMapper.selectById(id);
+        if (template == null) throw new RuntimeException("模板不存在");
+        List<RptTemplateField> fields = getAllFields(id);
+        if (fields.isEmpty()) throw new RuntimeException("模板没有字段，无法物化");
+        RptDatasource ds = materializeService.resolveDatasource(template);
+        String table = materializeService.ensureTable(template, fields, recreate);
+
+        template.setTableName(table);
+        template.setMaterialized(1);
+        template.setMaterializedTime(LocalDateTime.now());
+        template.setUpdateTime(LocalDateTime.now());
+        rptTemplateMapper.updateById(template);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("templateId", id);
+        result.put("tableName", table);
+        result.put("datasourceId", ds.getId());
+        result.put("dialect", ds.getDsType());
+        result.put("fieldCount", fields.size());
+        result.put("recreated", recreate);
+        return result;
+    }
+
+    /**
+     * 删除物化表
+     */
+    @Transactional
+    public void dropMaterialized(Long id) {
+        RptTemplate template = rptTemplateMapper.selectById(id);
+        if (template == null) throw new RuntimeException("模板不存在");
+        materializeService.dropTable(template);
+        template.setMaterialized(0);
+        template.setMaterializedTime(null);
+        template.setUpdateTime(LocalDateTime.now());
+        rptTemplateMapper.updateById(template);
+    }
+
+    /**
+     * 生成模板下载文件（表头 = 字段名，示例行 = 字段类型说明）
+     */
+    public byte[] downloadTemplate(Long id) {
+        RptTemplate template = rptTemplateMapper.selectById(id);
+        if (template == null) throw new RuntimeException("模板不存在");
+        List<RptTemplateField> fields = getAllFields(id);
+        if (fields.isEmpty()) throw new RuntimeException("模板没有字段");
+        List<String> headers = fields.stream().map(RptTemplateField::getFieldName).collect(Collectors.toList());
+        List<String> examples = fields.stream()
+                .map(f -> "(" + f.getFieldType() + (f.getIsKey() != null && f.getIsKey() == 1 ? ",主键" : "") + ")")
+                .collect(Collectors.toList());
+        return excelService.buildTemplate(headers, examples);
+    }
+
+    private String guessFieldType(String header) {
+        if (header == null) return "VARCHAR";
+        String h = header.trim();
+        if (h.contains("日期") || h.contains("时间")) return "DATETIME";
+        if (h.contains("数") || h.contains("金额") || h.contains("数量")) return "DECIMAL";
+        return "VARCHAR";
+    }
+
+    private String excelColumnName(int index) {
+        StringBuilder sb = new StringBuilder();
+        int i = index;
+        while (i >= 0) {
+            sb.insert(0, (char) ('A' + i % 26));
+            i = i / 26 - 1;
+        }
+        return sb.toString();
+    }
 
     /**
      * 分页查询模板
@@ -81,9 +192,11 @@ public class RptTemplateService {
 
     /**
      * 创建模板
+     *
+     * @return 新建模板 ID（前端保存后需要立即物化/下载，必须回传主键）
      */
     @Transactional
-    public void add(RptTemplate template, List<RptTemplateField> fields) {
+    public Long add(RptTemplate template, List<RptTemplateField> fields) {
         RptTemplate exist = rptTemplateMapper.selectOne(
                 Wrappers.<RptTemplate>lambdaQuery().eq(RptTemplate::getTemplateCode, template.getTemplateCode()));
         if (exist != null) throw new RuntimeException("模板编码已存在");
@@ -101,6 +214,14 @@ public class RptTemplateService {
                 rptTemplateFieldMapper.insert(field);
             }
         }
+        return template.getId();
+    }
+
+    /** 按模板编码查询（前端保存后按编码回查） */
+    public RptTemplate getByCode(String templateCode) {
+        if (StrUtil.isBlank(templateCode)) return null;
+        return rptTemplateMapper.selectOne(
+                Wrappers.<RptTemplate>lambdaQuery().eq(RptTemplate::getTemplateCode, templateCode));
     }
 
     /**

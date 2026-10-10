@@ -8,13 +8,17 @@ import com.reportsys.service.RptTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.reportsys.annotation.OperLog;
 
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/task")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
 public class TaskController {
 
     @Autowired
@@ -52,6 +56,8 @@ public class TaskController {
             }
             rptTaskService.createTask(task);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -73,6 +79,8 @@ public class TaskController {
             // 重新创建(Service的createTask)
             rptTaskService.createTask(task);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -86,6 +94,8 @@ public class TaskController {
         try {
             rptTaskService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -99,6 +109,8 @@ public class TaskController {
         try {
             rptTaskService.publishTask(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -112,6 +124,8 @@ public class TaskController {
         try {
             rptTaskService.updateStatus(id, 4);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -126,14 +140,23 @@ public class TaskController {
                                 @RequestParam(required = false) List<Long> userIds,
                                 @RequestParam String assignType) {
         try {
-            if ("FILL".equals(assignType)) {
-                rptTaskService.assignTask(id, userIds, null);
-            } else if ("AUDIT".equals(assignType)) {
-                rptTaskService.assignTask(id, null, userIds);
-            } else {
+            boolean hasUsers = userIds != null && !userIds.isEmpty();
+            boolean hasDepts = deptIds != null && !deptIds.isEmpty();
+            if (!hasUsers && !hasDepts) {
+                return Result.error("请至少选择一个分派对象（userIds 或 deptIds）");
+            }
+            boolean audit = "AUDIT".equals(assignType);
+            if (!"FILL".equals(assignType) && !audit) {
                 return Result.error("无效的分派类型，应为 FILL 或 AUDIT");
             }
+            if (hasUsers) {
+                rptTaskService.assignTask(id, audit ? null : userIds, audit ? userIds : null);
+            } else {
+                rptTaskService.assignTaskByDepts(id, deptIds, audit);
+            }
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -162,6 +185,34 @@ public class TaskController {
             Map<String, Object> stats = rptTaskService.getTaskStatistics();
             return Result.success(stats);
         } catch (Exception e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 手动触发生成当前属期的部门子任务（P0-C；定时任务默认每天 00:05 自动执行）
+     */
+    @PostMapping("/generate-periodic")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @OperLog(module = "任务管理", action = "生成周期任务")
+    public Result<Map<String, Object>> generatePeriodic(@RequestParam(required = false) Long parentTaskId) {
+        try {
+            return Result.success(rptTaskService.generatePeriodicTasks(parentTaskId));
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 主任务的子任务列表（P0-C）
+     */
+    @GetMapping("/{id}/children")
+    public Result<List<RptTask>> children(@PathVariable Long id) {
+        try {
+            return Result.success(rptTaskService.listChildren(id));
+        } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
     }
