@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import TemplateAuthModal from '@/components/TemplateAuthModal';
 import {
   Table, Button, Space, Tag, Form, Input, Select, Switch, message, Popconfirm, App,
 } from 'antd';
@@ -15,6 +16,7 @@ const TemplateListPage: React.FC = () => {
   const { list, total, loading, fetchList, remove, toggleStatus } = useTemplateStore();
   const [searchForm] = Form.useForm();
   const [searchParams, setSearchParams] = useState<Record<string, any>>({});
+  const [authModal, setAuthModal] = useState<{ open: boolean; id?: number; name?: string }>({ open: false });
 
   const doFetch = useCallback((params: Record<string, any> = {}) => {
     fetchList({ current: 1, size: 10, ...params });
@@ -87,6 +89,7 @@ const TemplateListPage: React.FC = () => {
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/template/detail/${record.id}`)}>详情</Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/template/detail/${record.id}`)}>编辑</Button>
+          <Button type="link" size="small" onClick={() => setAuthModal({ open: true, id: record.id, name: record.name })}>授权</Button>
           <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
@@ -135,6 +138,13 @@ const TemplateListPage: React.FC = () => {
           showSizeChanger: true,
           showTotal: (t) => `共 ${t} 条`,
         }}
+      />
+
+      <TemplateAuthModal
+        open={authModal.open}
+        templateId={authModal.id}
+        templateName={authModal.name}
+        onClose={() => setAuthModal({ open: false })}
       />
     </div>
   );

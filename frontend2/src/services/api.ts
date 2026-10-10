@@ -1130,3 +1130,141 @@ export async function getOperLogPageApi(params: PageParams & {
 }) {
   return request.get<ApiResponse<{ list: OperLogItem[]; total: number }>>('/operLog/page', { params });
 }
+
+// ==================== 在线用户 / 异地登录 / 踢下线 ====================
+
+export interface OnlineUserItem {
+  id: number;
+  userId?: number;
+  username?: string;
+  sessionId?: string;
+  ip?: string;
+  userAgent?: string;
+  loginTime?: string;
+  lastActiveTime?: string;
+  status?: number;
+  realName?: string;
+  deptName?: string;
+}
+
+export async function getOnlineListApi(params?: { keyword?: string }) {
+  return request.get<ApiResponse<OnlineUserItem[]>>('/online/list', { params });
+}
+
+export async function getOnlineCountApi() {
+  return request.get<ApiResponse<{ online: number }>>('/online/count');
+}
+
+export async function kickOnlineApi(data: { sessionId: string; reason?: string }) {
+  return request.post<ApiResponse<number>>('/online/kick', null, { params: data });
+}
+
+export async function kickOnlineUserApi(data: { userId: number; reason?: string }) {
+  return request.post<ApiResponse<number>>('/online/kick-user', null, { params: data });
+}
+
+// ==================== 统计规则配置 ====================
+
+export interface StatisticsRuleItem {
+  id?: number;
+  ruleCode: string;
+  ruleName?: string;
+  graceDays?: number;
+  remindDays?: number;
+  enabled?: number;
+  remark?: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export async function getStatisticsRuleListApi() {
+  return request.get<ApiResponse<StatisticsRuleItem[]>>('/statistics-rule/list');
+}
+
+export async function getStatisticsRuleEffectiveApi() {
+  return request.get<ApiResponse<Record<string, any>>>('/statistics-rule/effective');
+}
+
+export async function saveStatisticsRuleApi(data: StatisticsRuleItem) {
+  return request.post<ApiResponse<number>>('/statistics-rule', data);
+}
+
+export async function deleteStatisticsRuleApi(id: number) {
+  return request.delete<ApiResponse<null>>(`/statistics-rule/${id}`);
+}
+
+// ==================== 模板两级授权 ====================
+
+export interface TemplateAuthItem {
+  id: number;
+  templateId?: number;
+  authType?: string;
+  targetId?: number;
+  targetName?: string;
+  createBy?: number;
+  createTime?: string;
+}
+
+export async function getTemplateAuthsApi(templateId: number) {
+  return request.get<ApiResponse<TemplateAuthItem[]>>(`/template/${templateId}/auths`);
+}
+
+export async function grantTemplateAuthApi(templateId: number, data: { authType: string; targetIds: number[] }) {
+  return request.post<ApiResponse<number>>(`/template/${templateId}/auths`, data);
+}
+
+export async function revokeTemplateAuthApi(templateId: number, authId: number) {
+  return request.delete<ApiResponse<null>>(`/template/${templateId}/auths/${authId}`);
+}
+
+// ==================== 分卷附件 ====================
+
+export interface VolumeGroup {
+  groupKey: string;
+  partCount?: number;
+  totalSize?: number;
+  parts?: {
+    volumeIndex: number; fileId: number; fileName: string;
+    fileSize?: number; md5?: string; createTime?: string;
+  }[];
+}
+
+export async function uploadVolumeApi(file: File, data: {
+  groupKey: string; volumeIndex: number; taskId?: number; dataId?: number;
+}) {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('groupKey', data.groupKey);
+  fd.append('volumeIndex', String(data.volumeIndex));
+  if (data.taskId !== undefined) fd.append('taskId', String(data.taskId));
+  if (data.dataId !== undefined) fd.append('dataId', String(data.dataId));
+  return request.post<ApiResponse<Record<string, any>>>('/file/volume/upload', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+export async function getVolumeGroupsApi(taskId?: number) {
+  return request.get<ApiResponse<VolumeGroup[]>>('/file/volume/list', { params: { taskId } });
+}
+
+export async function downloadVolumeGroupApi(groupKey: string) {
+  return request.get<Blob>(`/file/volume/${groupKey}/download`, { responseType: 'blob' });
+}
+
+export async function deleteVolumeGroupApi(groupKey: string) {
+  return request.delete<ApiResponse<number>>(`/file/volume/${groupKey}`);
+}
+
+// ==================== 质检通道 ====================
+
+export async function submitQualityApi(taskDataId: number) {
+  return request.post<ApiResponse<Record<string, any>>>(`/quality/${taskDataId}/submit`);
+}
+
+export async function getQualityApi(taskDataId: number) {
+  return request.get<ApiResponse<Record<string, any>>>(`/quality/${taskDataId}`);
+}
+
+export async function getChannelStatusApi() {
+  return request.get<ApiResponse<Record<string, any>>>('/quality/channel/status');
+}

@@ -114,8 +114,12 @@ public class DataInitializer implements CommandLineRunner {
         jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (33, 2, '审计日志', 'C', '/system/operLog', 'System/OperLog', 'FileSearchOutlined', 5, 1, 'system:operlog:view')");
         jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (34, 6, '数据范围', 'C', '/dataRange', 'DataRange', 'FilterOutlined', 4, 1, 'dataRange:view')");
 
+        // 在线用户 / 统计规则（第 4 批）
+        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (35, 2, '在线用户', 'C', '/system/online', 'System/OnlineUser', 'WifiOutlined', 6, 1, 'system:online:view')");
+        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (36, 2, '统计规则', 'C', '/system/statisticsRule', 'System/StatisticsRule', 'SlidersOutlined', 7, 1, 'system:rule:view')");
+
         // Assign all menus to admin role
-        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 8),(1, 9),(1, 10),(1, 11),(1, 12),(1, 13),(1, 14),(1, 15),(1, 16),(1, 17),(1, 18),(1, 19),(1, 20),(1, 21),(1, 22),(1, 23),(1, 24),(1, 25),(1, 26),(1, 27),(1, 28),(1, 29),(1, 30),(1, 31),(1, 32),(1, 33),(1, 34)");
+        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 8),(1, 9),(1, 10),(1, 11),(1, 12),(1, 13),(1, 14),(1, 15),(1, 16),(1, 17),(1, 18),(1, 19),(1, 20),(1, 21),(1, 22),(1, 23),(1, 24),(1, 25),(1, 26),(1, 27),(1, 28),(1, 29),(1, 30),(1, 31),(1, 32),(1, 33),(1, 34),(1, 35),(1, 36)");
 
         // 部门管理员（DEPT_ADMIN）：除「系统管理」外的业务菜单。
         // 原先该角色没有任何菜单授权，导致 user/user123 登录后侧边栏为空。
