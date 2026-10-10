@@ -51,6 +51,12 @@ const TaskAudit = lazy(() => import('@/pages/Audit/TaskAudit'));
 const Trajectory = lazy(() => import('@/pages/Audit/Trajectory'));
 const Correct = lazy(() => import('@/pages/Audit/Correct'));
 
+// P1-F / P2-G
+const Todo = lazy(() => import('@/pages/Todo'));
+const Dict = lazy(() => import('@/pages/System/Dict'));
+const OperLog = lazy(() => import('@/pages/System/OperLog'));
+const DataRange = lazy(() => import('@/pages/DataRange'));
+
 const App: React.FC = () => {
   const { token, initialize } = useAuthStore();
 
@@ -117,6 +123,12 @@ const App: React.FC = () => {
               <Route path="audit/task-audit" element={<TaskAudit />} />
               <Route path="audit/trajectory" element={<Trajectory />} />
               <Route path="audit/correct" element={<Correct />} />
+
+              {/* P1-F / P2-G */}
+              <Route path="todo" element={<Todo />} />
+              <Route path="system/dict" element={<Dict />} />
+              <Route path="system/operLog" element={<OperLog />} />
+              <Route path="dataRange" element={<DataRange />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

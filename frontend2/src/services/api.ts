@@ -979,11 +979,10 @@ export async function downloadFileApi(id: number) {
 // ==================== P1-F / P2-G 待办 / 字典 / 数据范围 / 审计日志 ====================
 
 export interface TodoSummary {
-  unread?: number;
-  read?: number;
-  today?: number;
-  overdue?: number;
-  total?: number;
+  todoCount?: number;
+  doneCount?: number;
+  todayCount?: number;
+  overdueCount?: number;
   [key: string]: any;
 }
 
@@ -1034,7 +1033,6 @@ export interface DictItem {
   dictType: string;
   dictCode: string;
   dictLabel: string;
-  dictValue?: string;
   sort?: number;
   status?: number;
   remark?: string;
