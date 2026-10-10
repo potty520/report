@@ -62,16 +62,31 @@ public class JwtTokenUtil {
     }
 
     public String generateToken(Long userId, String username) {
+        return generateToken(userId, username, java.util.UUID.randomUUID().toString().replace("-", ""));
+    }
+
+    /**
+     * 生成 token，并把会话标识写入标准 jti 声明。
+     * 在线用户/踢下线功能依赖该 jti 关联 rpt_online_user.session_id。
+     */
+    public String generateToken(Long userId, String username, String sessionId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
         return Jwts.builder()
                 .setClaims(claims)
+                .setId(sessionId)
                 .setSubject(username)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expireMillis))
                 .signWith(getKey(), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    /** 读取 token 的会话标识（jti） */
+    public String getSessionId(String token) {
+        Claims claims = parseToken(token);
+        return claims == null ? null : claims.getId();
     }
 
     public Claims parseToken(String token) {

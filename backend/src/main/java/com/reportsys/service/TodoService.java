@@ -46,6 +46,8 @@ public class TodoService {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private SmsService smsService;
+    @Autowired
+    private StatisticsRuleService statisticsRuleService;
 
     /** 发一条站内消息 */
     @Transactional
@@ -189,10 +191,15 @@ public class TodoService {
      */
     @Transactional
     public Map<String, Object> scanOverdue(Long operatorId) {
+        // 超期判定可配置（rpt_statistics_rule.OVERDUE_REMIND.grace_days）：
+        // 默认宽限 0 天，SQL 与配置前完全等价。
+        int graceDays = statisticsRuleService.overdueGraceDays();
         List<Map<String, Object>> tasks = jdbcTemplate.queryForList(
                 "SELECT t.id, t.task_name FROM rpt_task t WHERE t.status IN (1,2) "
-                        + "AND t.fill_deadline IS NOT NULL AND t.fill_deadline < NOW() "
-                        + "AND NOT EXISTS (SELECT 1 FROM rpt_task_data d WHERE d.task_id = t.id AND d.status = 1)");
+                        + "AND t.fill_deadline IS NOT NULL "
+                        + "AND t.fill_deadline < DATE_SUB(NOW(), INTERVAL ? DAY) "
+                        + "AND NOT EXISTS (SELECT 1 FROM rpt_task_data d WHERE d.task_id = t.id AND d.status = 1)",
+                graceDays);
         int notified = 0;
         List<String> details = new ArrayList<>();
         for (Map<String, Object> row : tasks) {
