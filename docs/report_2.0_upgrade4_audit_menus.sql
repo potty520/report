@@ -30,6 +30,23 @@ INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
   (4, 22), (4, 23), (4, 24), (4, 25), (4, 26), (4, 27), (4, 28), (4, 29);
 
+-- ---------------------------------------------------------------------------
+-- P1-D 附件管理（分片上传 / 秒传 / 断点续传 / 下载）
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
+VALUES (30, 22, '附件管理', 'C', '/file/list', 'File/List', 'PaperClipOutlined', 3, 1, 'file:list');
+
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+  (1, 30), (2, 30), (3, 30);
+
+-- ---------------------------------------------------------------------------
+-- 附件上传上限（必须先放开，否则 >1MB 的附件一律失败）
+--   1) Spring：spring.servlet.multipart.max-file-size / max-request-size
+--      —— 已在 backend/src/main/resources/application.yml 提供（默认 50MB/60MB）
+--      线上还需同步 /opt/report/application-prod.yml（该文件是 --spring.config.location 指定的唯一配置）
+--   2) nginx：client_max_body_size（默认 1MB，实测 1.5MB 上传直接 413）
+--      在 listen 8091 的 server 块内加：client_max_body_size 60m;
+--
 -- 校验
--- SELECT id, parent_id, menu_name, menu_type, path FROM sys_menu WHERE id BETWEEN 25 AND 29;
+-- SELECT id, parent_id, menu_name, menu_type, path FROM sys_menu WHERE id BETWEEN 25 AND 30;
 -- SELECT role_id, COUNT(*) FROM sys_role_menu GROUP BY role_id;
