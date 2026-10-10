@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/dept")
+@RequestMapping({"/dept", "/org/dept"})
 @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
 public class DeptController {
 
@@ -77,6 +77,13 @@ public class DeptController {
     /**
      * 删除部门
      */
+    /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
+    @PutMapping("/{id}")
+    public Result<Void> updateById(@PathVariable Long id, @RequestBody SysDept dept) {
+        dept.setId(id);
+        return update(dept);
+    }
+
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {

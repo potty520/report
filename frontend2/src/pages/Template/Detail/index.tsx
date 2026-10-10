@@ -128,7 +128,7 @@ const TemplateDetailPage: React.FC = () => {
                 type="primary"
                 icon={<EditOutlined />}
                 block
-                onClick={() => navigate(`/template/add`)}
+                onClick={() => navigate(`/template/wizard?id=${id}`)}
                 disabled={currentItem.status === 1}
               >
                 编辑模板

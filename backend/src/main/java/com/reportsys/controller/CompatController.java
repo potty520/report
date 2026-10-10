@@ -24,6 +24,7 @@ import com.reportsys.model.SysProject;
 import com.reportsys.model.SysRole;
 import com.reportsys.model.SysUser;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -86,7 +87,8 @@ public class CompatController {
     }
 
     /** 部门详情（前端 GET /org/dept/{id} 已改到这里） */
-    @GetMapping("/dept/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
+    @GetMapping({"/dept/{id}", "/org/dept/{id}"})
     public Result<SysDept> deptById(@PathVariable Long id) {
         SysDept dept = sysDeptMapper.selectById(id);
         if (dept == null) {
@@ -96,7 +98,8 @@ public class CompatController {
     }
 
     /** 项目详情 */
-    @GetMapping("/project/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
+    @GetMapping({"/project/{id}", "/org/project/{id}"})
     public Result<SysProject> projectById(@PathVariable Long id) {
         SysProject project = sysProjectMapper.selectById(id);
         if (project == null) {
@@ -106,6 +109,7 @@ public class CompatController {
     }
 
     /** 任务详情（前端 GET /task/{id}，原来是 PUT /task/{id} 之外的缺口） */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
     @GetMapping("/task/{id}")
     public Result<RptTask> taskById(@PathVariable Long id) {
         RptTask task = rptTaskMapper.selectById(id);
@@ -119,6 +123,7 @@ public class CompatController {
      * 分派记录分页（前端 GET /task/assign/page）。
      * 后端原来只有按任务查的 GET /task/{id}/assigns，这里补一个可分页、可过滤的列表。
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
     @GetMapping("/task/assign/page")
     public Result<PageResult<Map<String, Object>>> assignPage(
             @RequestParam(defaultValue = "1") int page,
@@ -159,6 +164,7 @@ public class CompatController {
     }
 
     /** 取消分派（前端 DELETE /task/assign/{id}） */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
     @DeleteMapping("/task/assign/{id}")
     public Result<Void> deleteAssign(@PathVariable Long id) {
         rptTaskAssignMapper.deleteById(id);
@@ -200,6 +206,7 @@ public class CompatController {
     }
 
     /** 数据源详情（前端 GET /datasource/{id}；DatasourceController 原本只有列表与增删改） */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @GetMapping("/datasource/{id}")
     public Result<RptDatasource> datasourceById(@PathVariable Long id) {
         RptDatasource ds = rptDatasourceMapper.selectById(id);
@@ -211,6 +218,7 @@ public class CompatController {
     }
 
     /** 用户详情（前端 GET /user/{id}） */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @GetMapping("/user/{id}")
     public Result<SysUser> userById(@PathVariable Long id) {
         SysUser user = sysUserMapper.selectById(id);
@@ -222,6 +230,7 @@ public class CompatController {
     }
 
     /** 角色下拉列表（兼容旧前端的 GET /role/all；否则会被 /role/{id} 吞掉报 NumberFormatException） */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @GetMapping("/role/all")
     public Result<List<SysRole>> roleAll() {
         return Result.success(sysRoleMapper.selectList(
@@ -229,6 +238,7 @@ public class CompatController {
     }
 
     /** 角色详情（前端 GET /role/{id}） */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @GetMapping("/role/{id}")
     public Result<SysRole> roleById(@PathVariable Long id) {
         SysRole role = sysRoleMapper.selectById(id);
@@ -239,6 +249,7 @@ public class CompatController {
     }
 
     /** 菜单详情（前端 GET /menu/{id}） */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @GetMapping("/menu/{id}")
     public Result<SysMenu> menuById(@PathVariable Long id) {
         SysMenu menu = sysMenuMapper.selectById(id);
