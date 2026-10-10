@@ -42,6 +42,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     /** 角色缓存 30 秒，避免每个请求都查库 */
     private static final long ROLE_CACHE_MILLIS = 30 * 1000L;
 
+    /** 在线心跳写入节流：同一会话 60 秒最多写一次 */
+    private static final long HEARTBEAT_MILLIS = 60 * 1000L;
+
+    /** 会话 → 上次心跳时间 */
+    private final Map<String, Long> heartbeatAt = new ConcurrentHashMap<>();
+
     private static final class CachedRoles {
         private final List<GrantedAuthority> authorities;
         private final long loadedAt;
@@ -100,6 +106,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
         request.setAttribute("sessionId", sessionId);
+
+        // 心跳：刷新在线会话的活跃时间，供"在线用户"判断真实在线（30 分钟无活动视为离线）。
+        // 按会话 60 秒节流，避免每个请求都写库。
+        if (sessionId != null) {
+            long now = System.currentTimeMillis();
+            Long last = heartbeatAt.get(sessionId);
+            if (last == null || now - last > HEARTBEAT_MILLIS) {
+                heartbeatAt.put(sessionId, now);
+                try {
+                    jdbcTemplate.update(
+                            "UPDATE rpt_online_user SET last_active_time = NOW() WHERE session_id = ?", sessionId);
+                } catch (Exception e) {
+                    // 表未迁移时忽略，不影响认证
+                }
+            }
+        }
 
         request.setAttribute("userId", userId);
         UsernamePasswordAuthenticationToken authentication =

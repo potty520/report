@@ -46,11 +46,22 @@ public class OnlineUserService {
                     others.add(row);
                 }
             }
-            jdbcTemplate.update(
-                    "INSERT INTO rpt_online_user (user_id, username, session_id, ip, user_agent, "
-                            + "login_time, last_active_time, status) VALUES (?,?,?,?,?,NOW(),NOW(),1)",
-                    userId, username, sessionId, ip,
-                    StrUtil.maxLength(StrUtil.nullToEmpty(userAgent), 300));
+            // 缺陷修复（v2）：不要"新登录就顶掉旧会话"——那会让同一账号的其它标签页/脚本
+            // 立刻 401（实测导致 42 项回归失败）。改为**同一 (用户, IP) 原地更新**：
+            // 重复登录只刷新那一行（不新增、不踢人），配合 JwtAuthFilter 心跳 +
+            // list/count 的 30 分钟活跃窗口，即可消除"只增不减"。
+            int updated = jdbcTemplate.update(
+                    "UPDATE rpt_online_user SET session_id = ?, user_agent = ?, login_time = NOW(), "
+                            + "last_active_time = NOW(), status = 1, offline_reason = NULL, offline_time = NULL "
+                            + "WHERE user_id = ? AND ip = ? AND status = 1",
+                    sessionId, StrUtil.maxLength(StrUtil.nullToEmpty(userAgent), 300), userId, ip);
+            if (updated == 0) {
+                jdbcTemplate.update(
+                        "INSERT INTO rpt_online_user (user_id, username, session_id, ip, user_agent, "
+                                + "login_time, last_active_time, status) VALUES (?,?,?,?,?,NOW(),NOW(),1)",
+                        userId, username, sessionId, ip,
+                        StrUtil.maxLength(StrUtil.nullToEmpty(userAgent), 300));
+            }
             // 保留 7 天，避免历史会话无限增长
             jdbcTemplate.update("DELETE FROM rpt_online_user WHERE user_id = ? "
                     + "AND login_time < DATE_SUB(NOW(), INTERVAL 7 DAY)", userId);
@@ -71,7 +82,8 @@ public class OnlineUserService {
                             + "o.user_agent AS userAgent, o.login_time AS loginTime, o.last_active_time AS lastActiveTime, "
                             + "o.status, u.real_name AS realName, d.dept_name AS deptName "
                             + "FROM rpt_online_user o LEFT JOIN sys_user u ON u.id = o.user_id "
-                            + "LEFT JOIN sys_dept d ON d.id = u.dept_id WHERE o.status = 1 ");
+                            + "LEFT JOIN sys_dept d ON d.id = u.dept_id WHERE o.status = 1 "
+                    + "AND o.last_active_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE) ");
             List<Object> args = new ArrayList<>();
             if (StrUtil.isNotBlank(keyword)) {
                 sql.append(" AND (o.username LIKE ? OR o.ip LIKE ?) ");
@@ -89,7 +101,8 @@ public class OnlineUserService {
     public int onlineCount() {
         try {
             Integer n = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM rpt_online_user WHERE status = 1", Integer.class);
+                    "SELECT COUNT(*) FROM rpt_online_user WHERE status = 1 "
+                        + "AND last_active_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE)", Integer.class);
             return n == null ? 0 : n;
         } catch (Exception e) {
             return 0;
