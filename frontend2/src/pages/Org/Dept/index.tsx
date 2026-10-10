@@ -233,6 +233,9 @@ const DeptPage: React.FC = () => {
           <Form.Item name="deptName" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>
             <Input placeholder="请输入部门名称" />
           </Form.Item>
+            <Form.Item name="deptCode" label="部门编码" extra="可留空，系统自动生成（如 D000001）">
+              <Input placeholder="如 D000001" allowClear style={{ width: 260 }} />
+            </Form.Item>
           <Form.Item name="sort" label="排序">
             <InputNumber placeholder="排序号" style={{ width: '100%' }} min={0} />
           </Form.Item>
