@@ -86,19 +86,25 @@ public class DataInitializer implements CommandLineRunner {
         jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (28, 25, '流转轨迹', 'C', '/audit/trajectory', 'Audit/Trajectory', 'NodeIndexOutlined', 3, 1, 'audit:trajectory')");
         jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (29, 25, '补正管理', 'C', '/audit/correct', 'Audit/Correct', 'ToolOutlined', 4, 1, 'audit:correct')");
 
+        // 附件管理（P1-D：分片上传 / 秒传 / 断点续传 / 下载）
+        jdbcTemplate.update("INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission) VALUES (30, 22, '附件管理', 'C', '/file/list', 'File/List', 'PaperClipOutlined', 3, 1, 'file:list')");
+
         // Assign all menus to admin role
-        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 8),(1, 9),(1, 10),(1, 11),(1, 12),(1, 13),(1, 14),(1, 15),(1, 16),(1, 17),(1, 18),(1, 19),(1, 20),(1, 21),(1, 22),(1, 23),(1, 24),(1, 25),(1, 26),(1, 27),(1, 28),(1, 29)");
+        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 8),(1, 9),(1, 10),(1, 11),(1, 12),(1, 13),(1, 14),(1, 15),(1, 16),(1, 17),(1, 18),(1, 19),(1, 20),(1, 21),(1, 22),(1, 23),(1, 24),(1, 25),(1, 26),(1, 27),(1, 28),(1, 29),(1, 30)");
 
         // 部门管理员（DEPT_ADMIN）：除「系统管理」外的业务菜单。
         // 原先该角色没有任何菜单授权，导致 user/user123 登录后侧边栏为空。
         jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES "
                 + "(2, 1),(2, 8),(2, 9),(2, 10),(2, 11),(2, 12),(2, 13),(2, 14),"
                 + "(2, 15),(2, 16),(2, 17),(2, 18),(2, 19),(2, 20),(2, 21),"
-                + "(2, 22),(2, 23),(2, 24),(2, 25),(2, 26),(2, 27),(2, 28),(2, 29)");
+                + "(2, 22),(2, 23),(2, 24),(2, 25),(2, 26),(2, 27),(2, 28),(2, 29),(2, 30)");
 
         // 审核人（AUDIT_USER）：审核管理全部 + 填报审核
         jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES "
                 + "(4, 25),(4, 26),(4, 27),(4, 28),(4, 29),(4, 22),(4, 23),(4, 24)");
+
+        // 填报人（FILL_USER）：我的任务 + 附件管理
+        jdbcTemplate.update("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (3, 30)");
 
         System.out.println("=== Initial data inserted successfully ===");
     }

@@ -10,6 +10,12 @@ server:
 spring:
   application:
     name: report-system
+  servlet:
+    # 附件上传上限：默认 Spring Boot 仅 1MB，会让 >1MB 的附件直接失败
+    # （分片上传的每一片也必须小于 max-file-size）
+    multipart:
+      max-file-size: ${REPORT_UPLOAD_MAX_FILE_MB:50}MB
+      max-request-size: ${REPORT_UPLOAD_MAX_REQUEST_MB:60}MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 安全加固：凭证一律从环境变量注入，禁止再写入仓库

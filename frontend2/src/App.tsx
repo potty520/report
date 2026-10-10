@@ -29,6 +29,9 @@ const TemplateDetail = lazy(() => import('@/pages/Template/Detail'));
 // Datasource
 const DatasourceList = lazy(() => import('@/pages/Datasource/List'));
 
+// File (P1-D)
+const FileList = lazy(() => import('@/pages/File/List'));
+
 // Task pages
 const TaskFormulation = lazy(() => import('@/pages/Task/Formulation'));
 const TaskAssign = lazy(() => import('@/pages/Task/Assign'));
@@ -92,6 +95,9 @@ const App: React.FC = () => {
 
               {/* Datasource */}
               <Route path="datasource/list" element={<DatasourceList />} />
+
+              {/* File (P1-D) */}
+              <Route path="file/list" element={<FileList />} />
 
               {/* Task */}
               <Route path="task/formulation" element={<TaskFormulation />} />
