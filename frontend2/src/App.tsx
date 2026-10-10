@@ -42,6 +42,12 @@ const FillAudit = lazy(() => import('@/pages/Fill/Audit'));
 const DataApplyApply = lazy(() => import('@/pages/DataApply/Apply'));
 const DataApplyApprove = lazy(() => import('@/pages/DataApply/Approve'));
 
+// Audit pages (P0-C)
+const DeptAudit = lazy(() => import('@/pages/Audit/DeptAudit'));
+const TaskAudit = lazy(() => import('@/pages/Audit/TaskAudit'));
+const Trajectory = lazy(() => import('@/pages/Audit/Trajectory'));
+const Correct = lazy(() => import('@/pages/Audit/Correct'));
+
 const App: React.FC = () => {
   const { token, initialize } = useAuthStore();
 
@@ -99,6 +105,12 @@ const App: React.FC = () => {
               {/* Data Apply */}
               <Route path="dataApply/apply" element={<DataApplyApply />} />
               <Route path="dataApply/approve" element={<DataApplyApprove />} />
+
+              {/* Audit (P0-C) */}
+              <Route path="audit/dept-audit" element={<DeptAudit />} />
+              <Route path="audit/task-audit" element={<TaskAudit />} />
+              <Route path="audit/trajectory" element={<Trajectory />} />
+              <Route path="audit/correct" element={<Correct />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

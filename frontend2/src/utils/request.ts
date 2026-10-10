@@ -15,6 +15,20 @@ request.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // 分页参数名对齐后端：后端统一使用 page / pageSize，
+    // 前端各页面历史上传的是 current / size，若直传后端会被忽略（翻页与每页条数失效）。
+    if (config.params && typeof config.params === 'object') {
+      const p: Record<string, any> = { ...config.params };
+      if (p.current !== undefined && p.page === undefined) {
+        p.page = p.current;
+        delete p.current;
+      }
+      if (p.size !== undefined && p.pageSize === undefined) {
+        p.pageSize = p.size;
+        delete p.size;
+      }
+      config.params = p;
+    }
     return config;
   },
   (error) => {
