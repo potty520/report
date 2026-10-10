@@ -19,7 +19,11 @@ const TemplateListPage: React.FC = () => {
   const [authModal, setAuthModal] = useState<{ open: boolean; id?: number; name?: string }>({ open: false });
 
   const doFetch = useCallback((params: Record<string, any> = {}) => {
-    fetchList({ current: 1, size: 10, ...params });
+    // 后端按 templateName/templateCode 过滤；这里把旧前端的 name/code 一并映射过去
+    const mapped: Record<string, any> = { ...params };
+    if (params.name) mapped.templateName = params.name;
+    if (params.code) mapped.templateCode = params.code;
+    fetchList({ current: 1, size: 10, ...mapped });
   }, [fetchList]);
 
   useEffect(() => {
@@ -68,7 +72,7 @@ const TemplateListPage: React.FC = () => {
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
     { title: '模板名称', dataIndex: 'name', width: 200 },
     { title: '模板编码', dataIndex: 'code', width: 150 },
-    { title: '版本', dataIndex: 'version', width: 70, align: 'center' },
+    { title: '物化', dataIndex: 'materialized', width: 90, align: 'center', render: (v: number) => (v === 1 ? <Tag color="green">已物化</Tag> : <Tag>未物化</Tag>) },
     { title: '描述', dataIndex: 'description', ellipsis: true, width: 200, render: (v: string) => v || '-' },
     {
       title: '状态', dataIndex: 'status', width: 80, align: 'center',
@@ -124,7 +128,8 @@ const TemplateListPage: React.FC = () => {
         </Form>
       </div>
       <div className="table-operations">
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/template/add')}>新增模板</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/template/wizard')}>向导新建</Button>
+        <Button style={{ marginLeft: 8 }} onClick={() => navigate('/template/add')}>基础新建</Button>
       </div>
       <Table
         columns={columns}

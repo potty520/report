@@ -25,6 +25,7 @@ const ProjectPage = lazy(() => import('@/pages/Org/Project'));
 const TemplateList = lazy(() => import('@/pages/Template/List'));
 const TemplateAdd = lazy(() => import('@/pages/Template/Add'));
 const TemplateDetail = lazy(() => import('@/pages/Template/Detail'));
+const TemplateWizard = lazy(() => import('@/pages/Template/Wizard'));
 
 // Datasource
 const DatasourceList = lazy(() => import('@/pages/Datasource/List'));
@@ -99,6 +100,7 @@ const App: React.FC = () => {
               {/* Template */}
               <Route path="template/list" element={<TemplateList />} />
               <Route path="template/add" element={<TemplateAdd />} />
+              <Route path="template/wizard" element={<TemplateWizard />} />
               <Route path="template/detail/:id" element={<TemplateDetail />} />
 
               {/* Datasource */}
