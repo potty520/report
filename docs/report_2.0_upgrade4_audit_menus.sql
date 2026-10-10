@@ -1,81 +1,75 @@
--- P0-C 前端界面所需的菜单与角色授权（幂等，可重复执行）
--- 对应新增页面：/audit/dept-audit、/audit/task-audit、/audit/trajectory、/audit/correct
--- 与后端 DataInitializer.java 中的 INSERT IGNORE 保持一致。
-
--- 1) 一级目录：审核管理
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (25, 0, '审核管理', 'M', '/audit', NULL, 'AuditOutlined', 9, 1, NULL);
-
--- 2) 子菜单
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (26, 25, '部门审核', 'C', '/audit/dept-audit', 'Audit/DeptAudit', 'AuditOutlined', 1, 1, 'audit:dept');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (27, 25, '任务方审核', 'C', '/audit/task-audit', 'Audit/TaskAudit', 'SafetyCertificateOutlined', 2, 1, 'audit:task');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (28, 25, '流转轨迹', 'C', '/audit/trajectory', 'Audit/Trajectory', 'NodeIndexOutlined', 3, 1, 'audit:trajectory');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (29, 25, '补正管理', 'C', '/audit/correct', 'Audit/Correct', 'ToolOutlined', 4, 1, 'audit:correct');
-
--- 3) 授权：超级管理员
-INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-  (1, 25), (1, 26), (1, 27), (1, 28), (1, 29);
-
--- 4) 授权：部门管理员（原先该角色无任何菜单，登录后侧边栏为空）
-INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-  (2, 1), (2, 8), (2, 9), (2, 10), (2, 11), (2, 12), (2, 13), (2, 14),
-  (2, 15), (2, 16), (2, 17), (2, 18), (2, 19), (2, 20), (2, 21),
-  (2, 22), (2, 23), (2, 24), (2, 25), (2, 26), (2, 27), (2, 28), (2, 29);
-
--- 5) 授权：审核人
-INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-  (4, 22), (4, 23), (4, 24), (4, 25), (4, 26), (4, 27), (4, 28), (4, 29);
-
 -- ---------------------------------------------------------------------------
--- P1-D 附件管理（分片上传 / 秒传 / 断点续传 / 下载）
--- ---------------------------------------------------------------------------
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (30, 22, '附件管理', 'C', '/file/list', 'File/List', 'PaperClipOutlined', 3, 1, 'file:list');
-
-INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-  (1, 30), (2, 30), (3, 30);
-
--- ---------------------------------------------------------------------------
--- P1-F / P2-G 消息中心 / 字典管理 / 审计日志 / 数据范围
--- ---------------------------------------------------------------------------
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (31, 0, '消息中心', 'C', '/todo', 'Todo', 'BellOutlined', 10, 1, 'todo:list');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (32, 2, '字典管理', 'C', '/system/dict', 'System/Dict', 'BookOutlined', 4, 1, 'system:dict:view');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (33, 2, '审计日志', 'C', '/system/operLog', 'System/OperLog', 'FileSearchOutlined', 5, 1, 'system:operlog:view');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (34, 6, '数据范围', 'C', '/dataRange', 'DataRange', 'FilterOutlined', 4, 1, 'dataRange:view');
-
--- 字典管理与审计日志接口仅 SUPER_ADMIN 可用；数据范围需 SUPER_ADMIN/DEPT_ADMIN
-INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
-  (1, 31), (1, 32), (1, 33), (1, 34),
-  (2, 31), (2, 34),
-  (3, 31),
-  (4, 31);
-
--- ---------------------------------------------------------------------------
--- 在线用户 / 统计规则（接口均仅 SUPER_ADMIN 可用）
--- ---------------------------------------------------------------------------
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (35, 2, '在线用户', 'C', '/system/online', 'System/OnlineUser', 'WifiOutlined', 6, 1, 'system:online:view');
-INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_type, path, component, icon, sort, visible, permission)
-VALUES (36, 2, '统计规则', 'C', '/system/statisticsRule', 'System/StatisticsRule', 'SlidersOutlined', 7, 1, 'system:rule:view');
-
-INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (1, 35), (1, 36);
-
--- ---------------------------------------------------------------------------
--- 附件上传上限（必须先放开，否则 >1MB 的附件一律失败）
---   1) Spring：spring.servlet.multipart.max-file-size / max-request-size
---      —— 已在 backend/src/main/resources/application.yml 提供（默认 50MB/60MB）
---      线上还需同步 /opt/report/application-prod.yml（该文件是 --spring.config.location 指定的唯一配置）
---   2) nginx：client_max_body_size（默认 1MB，实测 1.5MB 上传直接 413）
---      在 listen 8091 的 server 块内加：client_max_body_size 60m;
+-- 界面菜单与角色授权（修正版 v2）
 --
+-- ⚠️ 踩坑记录（务必按本文件执行，不要用历史版本的 id）：
+--   1) sys_menu.menu_code 有唯一键且默认值为 ''，插入时必须显式给唯一 menu_code，
+--      否则从第二条起会因唯一键冲突被 INSERT IGNORE 静默跳过；
+--   2) 线上已存在 id 1-8 / 21-24 / 31-32 / 61-63 / 71-72 / 81-82，
+--      因此本版统一使用 id 83-94（AUTO_INCREMENT 亦为 83）。
+--
+-- 幂等，可重复执行。
+-- ---------------------------------------------------------------------------
+
+-- 1) 审核管理（P0-C）
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (83, 0, '审核管理', 'audit', 'M', '/audit', NULL, 'AuditOutlined', 9, 1, NULL);
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (84, 83, '部门审核', 'audit:dept', 'C', '/audit/dept-audit', 'Audit/DeptAudit', 'AuditOutlined', 1, 1, 'audit:dept');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (85, 83, '任务方审核', 'audit:task', 'C', '/audit/task-audit', 'Audit/TaskAudit', 'SafetyCertificateOutlined', 2, 1, 'audit:task');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (86, 83, '流转轨迹', 'audit:trajectory', 'C', '/audit/trajectory', 'Audit/Trajectory', 'NodeIndexOutlined', 3, 1, 'audit:trajectory');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (87, 83, '补正管理', 'audit:correct', 'C', '/audit/correct', 'Audit/Correct', 'ToolOutlined', 4, 1, 'audit:correct');
+
+-- 2) 附件管理（P1-D，挂在 **线上 id 7 = 填报管理** 下）
+--    注意：线上 sys_menu 的 id 空间与 backend/.../DataInitializer.java 的种子 id 不同
+--    （线上 7=填报管理、22=角色管理；种子里 22=填报审核）。历史上曾因此把附件管理挂错到角色管理下。
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (88, 7, '附件管理', 'file:list', 'C', '/file/list', 'File/List', 'PaperClipOutlined', 3, 1, 'file:list');
+
+-- 3) 消息中心（P1-F，一级）
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (89, 0, '消息中心', 'todo', 'C', '/todo', 'Todo', 'BellOutlined', 10, 1, 'todo:list');
+
+-- 4) 系统管理下属（P2-G）
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (90, 2, '字典管理', 'system:dict', 'C', '/system/dict', 'System/Dict', 'BookOutlined', 4, 1, 'system:dict:view');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (91, 2, '审计日志', 'system:operlog', 'C', '/system/operLog', 'System/OperLog', 'FileSearchOutlined', 5, 1, 'system:operlog:view');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (93, 2, '在线用户', 'system:online', 'C', '/system/online', 'System/OnlineUser', 'WifiOutlined', 6, 1, 'system:online:view');
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (94, 2, '统计规则', 'system:rule', 'C', '/system/statisticsRule', 'System/StatisticsRule', 'SlidersOutlined', 7, 1, 'system:rule:view');
+
+-- 5) 数据范围（挂在 6=任务管理 下）
+INSERT IGNORE INTO sys_menu (id, parent_id, menu_name, menu_code, menu_type, path, component, icon, sort, visible, permission)
+VALUES (92, 6, '数据范围', 'dataRange', 'C', '/dataRange', 'DataRange', 'FilterOutlined', 4, 1, 'dataRange:view');
+
+-- ---------------------------------------------------------------------------
+-- 角色授权（按接口真实权限：字典/审计/在线用户/统计规则仅 SUPER_ADMIN）
+--   注意：role 2（DEPT_ADMIN）在线上原本一条菜单授权都没有，登录后侧边栏是空的，
+--   这里按"部门管理员的业务范围（不含系统管理）"补齐。
+-- ---------------------------------------------------------------------------
+
+-- 超级管理员：新增菜单全部
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+  (1, 83), (1, 84), (1, 85), (1, 86), (1, 87), (1, 88), (1, 89),
+  (1, 90), (1, 91), (1, 92), (1, 93), (1, 94);
+
+-- 部门管理员：业务菜单（首页/模板/数据源/组织/任务/填报/数据申请/审核/附件/消息/数据范围）
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+  (2, 1), (2, 4), (2, 5), (2, 31), (2, 32),
+  (2, 61), (2, 62), (2, 63), (2, 71), (2, 72), (2, 81), (2, 82),
+  (2, 83), (2, 84), (2, 85), (2, 86), (2, 87), (2, 88), (2, 89), (2, 92);
+
+-- 审核人：审核管理 + 消息中心 + 附件
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES
+  (4, 83), (4, 84), (4, 85), (4, 86), (4, 87), (4, 88), (4, 89);
+
+-- 填报人：附件 + 消息中心
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (3, 88), (3, 89);
+
 -- 校验
--- SELECT id, parent_id, menu_name, menu_type, path FROM sys_menu WHERE id BETWEEN 25 AND 30;
+-- SELECT id, parent_id, menu_name, menu_code, menu_type, path FROM sys_menu WHERE id BETWEEN 83 AND 94 ORDER BY id;
 -- SELECT role_id, COUNT(*) FROM sys_role_menu GROUP BY role_id;
