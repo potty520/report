@@ -1,162 +1,145 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  Table, Button, Space, Tag, Form, Input, Select, Tabs, App,
-} from 'antd';
-import { SearchOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Table, Card, Row, Col, Statistic, Tabs, Button, Space, App, Progress } from 'antd';
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { useTaskStore } from '@/stores/useTaskStore';
-import type { TaskLedgerItem } from '@/services/api';
 import dayjs from 'dayjs';
+import { useLedgerStore } from '@/stores/useLedgerStore';
+import { exportLedgerApi } from '@/services/api';
+import { handleDownload } from '@/utils/download';
 
-const TaskLedgerPage: React.FC = () => {
+/**
+ * 任务台账（P1-E）：6 张视图 + 导出 + 完成率/按时率/超期率。
+ *
+ * 列由后端返回的 headers（字段→中文表头）动态生成，避免前后端字段漂移；
+ * 原先的「主办方/执行方视角」两 Tab 已由后端提供的 6 个标准视图取代。
+ */
+const LedgerPage: React.FC = () => {
   const { message: msg } = App.useApp();
-  const { ledgerList, ledgerTotal, ledgerLoading, fetchLedgerList } = useTaskStore();
-  const [searchForm] = Form.useForm();
-  const [perspective, setPerspective] = useState<'host' | 'executor'>('host');
-  const [searchParams, setSearchParams] = useState<Record<string, any>>({});
-
-  const doFetch = useCallback((params: Record<string, any> = {}) => {
-    fetchLedgerList({ current: 1, size: 10, perspective, ...params });
-  }, [fetchLedgerList, perspective]);
+  const { types, rates, view, loading, activeType, fetchTypes, fetchRates, fetchView } = useLedgerStore();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    doFetch();
-  }, [doFetch]);
+    (async () => {
+      const list = await fetchTypes();
+      fetchRates();
+      const first = list.length > 0 ? list[0].type : undefined;
+      if (first) fetchView(first, 1, pageSize);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleSearch = () => {
-    const values = searchForm.getFieldsValue();
-    setSearchParams(values);
-    doFetch(values);
+  const columns: ColumnsType<Record<string, any>> = useMemo(() => {
+    const entries = Object.entries(view.headers || {});
+    return entries.map(([key, label]) => ({
+      title: label,
+      dataIndex: key,
+      key,
+      ellipsis: true,
+      render: (value: any) => {
+        if (value === null || value === undefined || value === '') return '-';
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+          return dayjs(value).format('YYYY-MM-DD HH:mm:ss');
+        }
+        return String(value);
+      },
+    }));
+  }, [view.headers]);
+
+  const doExport = async () => {
+    if (!activeType) return;
+    setExporting(true);
+    try {
+      const res = await exportLedgerApi(activeType, 20000);
+      await handleDownload(res as any, `台账-${activeType}.xlsx`);
+      msg.success('导出成功');
+    } catch (e: any) {
+      msg.error(e?.message || '导出失败');
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handleReset = () => {
-    searchForm.resetFields();
-    setSearchParams({});
-    doFetch();
-  };
-
-  const handleTabChange = (key: string) => {
-    setPerspective(key as 'host' | 'executor');
-    setSearchParams({});
-    searchForm.resetFields();
-  };
-
-  const fillStatusMap: Record<number, { color: string; text: string }> = {
-    0: { color: 'default', text: '未填报' },
-    1: { color: 'processing', text: '已填报' },
-    2: { color: 'green', text: '已提交' },
-  };
-
-  const statusMap: Record<number, { color: string; text: string }> = {
-    0: { color: 'default', text: '未开始' },
-    1: { color: 'processing', text: '进行中' },
-    2: { color: 'green', text: '已完成' },
-  };
-
-  const columns: ColumnsType<TaskLedgerItem> = [
-    { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
-    { title: '任务名称', dataIndex: 'taskName', width: 200 },
-    { title: '模板', dataIndex: 'templateName', width: 150 },
-    { title: '部门', dataIndex: 'deptName', width: 150 },
-    { title: '项目', dataIndex: 'projectName', width: 120, render: (v: string) => v || '-' },
-    {
-      title: '任务状态', dataIndex: 'status', width: 80, align: 'center',
-      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text}</Tag>,
-    },
-    {
-      title: '填报状态', dataIndex: 'fillStatus', width: 80, align: 'center',
-      render: (v: number) => <Tag color={fillStatusMap[v]?.color}>{fillStatusMap[v]?.text}</Tag>,
-    },
-    {
-      title: '分派时间', dataIndex: 'assignTime', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: '填报时间', dataIndex: 'fillTime', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: '提交时间', dataIndex: 'submitTime', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: '操作', key: 'action', width: 100, fixed: 'right',
-      render: () => (
-        <Button type="link" size="small" icon={<EyeOutlined />}>详情</Button>
-      ),
-    },
-  ];
-
-  const tabItems = [
-    {
-      key: 'host',
-      label: '主办方视角',
-      children: (
-        <Table
-          columns={columns}
-          dataSource={ledgerList}
-          rowKey="id"
-          loading={ledgerLoading}
-          scroll={{ x: 1300 }}
-          onChange={(pagination) => doFetch({ current: pagination.current, size: pagination.pageSize, ...searchParams })}
-          pagination={{
-            total: ledgerTotal,
-            showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-          }}
-        />
-      ),
-    },
-    {
-      key: 'executor',
-      label: '执行方视角',
-      children: (
-        <Table
-          columns={columns}
-          dataSource={ledgerList}
-          rowKey="id"
-          loading={ledgerLoading}
-          scroll={{ x: 1300 }}
-          onChange={(pagination) => doFetch({ current: pagination.current, size: pagination.pageSize, ...searchParams })}
-          pagination={{
-            total: ledgerTotal,
-            showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-          }}
-        />
-      ),
-    },
-  ];
+  const num = (v?: number) => (v === undefined || v === null ? 0 : Number(v));
 
   return (
     <div style={{ padding: 24, background: '#fff', borderRadius: 8 }}>
-      <div className="search-form" style={{ marginBottom: 16 }}>
-        <Form form={searchForm} layout="inline">
-          <Form.Item name="taskName" label="任务名称">
-            <Input placeholder="请输入" allowClear />
-          </Form.Item>
-          <Form.Item name="deptName" label="部门">
-            <Input placeholder="请输入" allowClear />
-          </Form.Item>
-          <Form.Item name="fillStatus" label="填报状态">
-            <Select placeholder="请选择" allowClear style={{ width: 130 }}>
-              <Select.Option value={0}>未填报</Select.Option>
-              <Select.Option value={1}>已填报</Select.Option>
-              <Select.Option value={2}>已提交</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>搜索</Button>
-              <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </div>
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col span={4}><Card size="small"><Statistic title="应完成" value={num(rates.dueTask)} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="已完成" value={num(rates.doneTask)} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="按时完成" value={num(rates.ontimeTask)} valueStyle={{ color: '#3f8600' }} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="超期未完成" value={num(rates.overdueTask)} valueStyle={{ color: '#cf1322' }} /></Card></Col>
+        <Col span={8}>
+          <Card size="small" title="三率">
+            <Row gutter={8} align="middle">
+              <Col span={8} style={{ textAlign: 'center' }}>
+                <Progress type="circle" size={64} percent={num(rates.completeRate)} />
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>完成率</div>
+              </Col>
+              <Col span={8} style={{ textAlign: 'center' }}>
+                <Progress type="circle" size={64} percent={num(rates.ontimeRate)} strokeColor="#52c41a" />
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>按时率</div>
+              </Col>
+              <Col span={8} style={{ textAlign: 'center' }}>
+                <Progress type="circle" size={64} percent={num(rates.overdueRate)} strokeColor="#ff4d4f" />
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>超期率</div>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+      </Row>
 
-      <Tabs items={tabItems} onChange={handleTabChange} activeKey={perspective} />
+      <Card
+        size="small"
+        title="台账视图"
+        extra={
+          <Space>
+            <Button icon={<ReloadOutlined />} disabled={!activeType}
+              onClick={() => { fetchRates(); if (activeType) fetchView(activeType, page, pageSize); }}>刷新</Button>
+            <Button type="primary" icon={<DownloadOutlined />} loading={exporting} disabled={!activeType}
+              onClick={doExport}>导出 Excel</Button>
+          </Space>
+        }
+      >
+        <Tabs
+          activeKey={activeType}
+          onChange={(key) => {
+            setPage(1);
+            fetchView(key, 1, pageSize);
+          }}
+          items={types.map((t) => ({
+            key: t.type,
+            label: t.label,
+            children: (
+              <Table
+                columns={columns}
+                dataSource={view.list}
+                rowKey={(r) => String(r.id ?? r.taskId ?? r.deptId ?? JSON.stringify(r))}
+                loading={loading}
+                size="small"
+                scroll={{ x: Math.max(900, columns.length * 140) }}
+                onChange={(p) => {
+                  const nextPage = p.current || 1;
+                  const nextSize = p.pageSize || 20;
+                  setPage(nextPage);
+                  setPageSize(nextSize);
+                  fetchView(t.type, nextPage, nextSize);
+                }}
+                pagination={{
+                  current: page,
+                  pageSize,
+                  total: view.total,
+                  showSizeChanger: true,
+                  showTotal: (n) => `共 ${n} 条`,
+                }}
+              />
+            ),
+          }))}
+        />
+      </Card>
     </div>
   );
 };
 
-export default TaskLedgerPage;
+export default LedgerPage;
