@@ -758,3 +758,377 @@ export async function getOverviewChartDataApi(type: string) {
 export async function getOverviewTrendApi() {
   return request.get<ApiResponse<TrendDataItem[]>>('/overview/trend');
 }
+
+// ==================== P0-C 双通道审核 / 流转轨迹 / 补正 ====================
+
+export interface AuditDataItem {
+  id: number;
+  taskId?: number;
+  templateId?: number;
+  deptId?: number;
+  fillUserId?: number;
+  dataJson?: string;
+  status?: number;
+  submitTime?: string;
+  auditStatus?: number;
+  auditComment?: string;
+  auditTime?: string;
+  deptAuditStatus?: number;
+  deptAuditComment?: string;
+  deptAuditTime?: string;
+  taskAuditStatus?: number;
+  taskAuditComment?: string;
+  taskAuditTime?: string;
+  correctStatus?: number;
+  correctComment?: string;
+  inboundStatus?: number;
+  inboundRows?: number;
+  // 关联展示字段
+  deptName?: string;
+  taskName?: string;
+  templateName?: string;
+  fillUserName?: string;
+  fillRealName?: string;
+  belongTime?: string;
+  createTime?: string;
+}
+
+export interface TrajectoryNode {
+  id?: number;
+  node_code?: string;
+  node_name?: string;
+  action?: string;
+  operator_name?: string;
+  comment?: string;
+  create_time?: string;
+}
+
+export interface CorrectBatch {
+  id?: number;
+  task_id?: number;
+  data_ids?: string;
+  status?: number;
+  comment?: string;
+  start_time?: string;
+  close_time?: string;
+  start_user_name?: string;
+}
+
+/** 我的审核任务列表（分页） */
+export async function getAuditMyTasksApi(params: PageParams & { auditStatus?: number }) {
+  return request.get<ApiResponse<PageResult<AuditDataItem>>>('/audit/myTasks', { params });
+}
+
+/** 审核详情：某任务下的填报数据列表 */
+export async function getAuditTaskDataApi(taskId: number) {
+  return request.get<ApiResponse<PageResult<AuditDataItem>>>(`/audit/task/${taskId}`);
+}
+
+/** 审核统计（待审/通过/驳回/合计） */
+export async function getAuditStatisticsApi() {
+  return request.get<ApiResponse<Record<string, number>>>('/audit/statistics');
+}
+
+/** 部门审核（第一级） */
+export async function deptAuditApi(data: { taskDataId: number; pass: boolean; comment?: string }) {
+  return request.post<ApiResponse<null>>('/audit/dept-audit', null, { params: data });
+}
+
+/** 任务方审核（第二级，需部门审核通过） */
+export async function taskAuditApi(data: { taskDataId: number; pass: boolean; comment?: string }) {
+  return request.post<ApiResponse<null>>('/audit/task-audit', null, { params: data });
+}
+
+/** 任务流转轨迹 */
+export async function getTrajectoryApi(taskId: number) {
+  return request.get<ApiResponse<TrajectoryNode[]>>('/audit/trajectory', { params: { taskId } });
+}
+
+/** 发起补正 */
+export async function startCorrectApi(data: { taskId: number; dataIds?: string; comment?: string }) {
+  return request.post<ApiResponse<number>>('/audit/correct/start', null, { params: data });
+}
+
+/** 关闭补正 */
+export async function closeCorrectApi(data: { taskId: number; comment?: string }) {
+  return request.post<ApiResponse<null>>('/audit/correct/close', null, { params: data });
+}
+
+/** 补正批次列表 */
+export async function getCorrectListApi(taskId: number) {
+  return request.get<ApiResponse<CorrectBatch[]>>('/audit/correct/list', { params: { taskId } });
+}
+
+// ==================== P1-E 任务台账 ====================
+
+export interface LedgerTypeItem {
+  type: string;
+  label: string;
+}
+
+export interface LedgerRate {
+  dueTask?: number;
+  doneTask?: number;
+  ontimeTask?: number;
+  overdueTask?: number;
+  completeRate?: number;
+  ontimeRate?: number;
+  overdueRate?: number;
+  deptName?: string;
+  [key: string]: any;
+}
+
+/** 台账视图类型（6 个） */
+export async function getLedgerTypesApi() {
+  return request.get<ApiResponse<LedgerTypeItem[]>>('/ledger/types');
+}
+
+/** 三率统计 */
+export async function getLedgerRatesApi(params?: { deptId?: number; taskId?: number }) {
+  return request.get<ApiResponse<LedgerRate>>('/ledger/rates', { params });
+}
+
+/** 台账视图（分页） */
+export async function getLedgerViewApi(type: string, params: PageParams) {
+  return request.get<ApiResponse<{ list: Record<string, any>[]; total: number; headers?: Record<string, string> }>>(
+    `/ledger/${type}`, { params }
+  );
+}
+
+/** 导出台账（xlsx blob） */
+export async function exportLedgerApi(type: string, limit = 20000) {
+  return request.get<Blob>('/ledger/export', { params: { type, limit }, responseType: 'blob' });
+}
+
+// ==================== P1-D 附件与分片上传 ====================
+
+export interface FileItem {
+  id: number;
+  taskId?: number;
+  dataId?: number;
+  templateId?: number;
+  fileName: string;
+  storePath?: string;
+  fileSize?: number;
+  fileType?: string;
+  contentType?: string;
+  md5?: string;
+  uploadBy?: number;
+  uploadByName?: string;
+  createTime?: string;
+}
+
+export interface ChunkCheckResult {
+  fileKey: string;
+  uploadedChunks: number[];
+  skipUpload: boolean;
+  fileId?: number;
+}
+
+/** 普通上传 */
+export async function uploadFileApi(file: File, extra?: Record<string, any>) {
+  const fd = new FormData();
+  fd.append('file', file);
+  Object.entries(extra || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
+  });
+  return request.post<ApiResponse<FileItem>>('/file/upload', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+/** 分片检查（秒传 / 断点续传） */
+export async function checkChunkApi(params: { fileKey: string; fileName?: string; md5?: string }) {
+  return request.get<ApiResponse<ChunkCheckResult>>('/file/chunk/check', { params });
+}
+
+/** 上传单个分片 */
+export async function uploadChunkApi(fileKey: string, chunkIndex: number, chunk: Blob) {
+  const fd = new FormData();
+  fd.append('fileKey', fileKey);
+  fd.append('chunkIndex', String(chunkIndex));
+  fd.append('file', chunk);
+  return request.post<ApiResponse<{ received: number }>>('/file/chunk', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+/** 合并分片 */
+export async function mergeChunkApi(data: {
+  fileKey: string; fileName: string; chunkTotal: number;
+  taskId?: number; dataId?: number; fileType?: string;
+}) {
+  return request.post<ApiResponse<FileItem>>('/file/chunk/merge', null, { params: data });
+}
+
+/** 附件列表（按任务） */
+export async function getFileListApi(taskId: number) {
+  return request.get<ApiResponse<FileItem[]>>('/file/list', { params: { taskId } });
+}
+
+/** 删除附件（软删除） */
+export async function deleteFileApi(id: number) {
+  return request.delete<ApiResponse<null>>(`/file/${id}`);
+}
+
+/** 下载附件（blob，需带 token） */
+export async function downloadFileApi(id: number) {
+  return request.get<Blob>(`/file/${id}/download`, { responseType: 'blob' });
+}
+
+// ==================== P1-F / P2-G 待办 / 字典 / 数据范围 / 审计日志 ====================
+
+export interface TodoSummary {
+  unread?: number;
+  read?: number;
+  today?: number;
+  overdue?: number;
+  total?: number;
+  [key: string]: any;
+}
+
+export interface TodoMessage {
+  id: number;
+  userId?: number;
+  title: string;
+  content?: string;
+  msgType?: string;
+  bizTaskId?: number;
+  readFlag?: number;
+  createBy?: number;
+  createTime?: string;
+}
+
+/** 待办汇总 */
+export async function getTodoSummaryApi() {
+  return request.get<ApiResponse<TodoSummary>>('/todo/summary');
+}
+
+/** 我的消息（分页） */
+export async function getTodoListApi(params: PageParams & { readFlag?: number; msgType?: string }) {
+  return request.get<ApiResponse<{ list: TodoMessage[]; total: number }>>('/todo/list', { params });
+}
+
+/** 标记已读 */
+export async function readTodoApi(id: number) {
+  return request.post<ApiResponse<null>>(`/todo/${id}/read`);
+}
+
+/** 全部已读 */
+export async function readAllTodoApi() {
+  return request.post<ApiResponse<{ updated: number }>>('/todo/read-all');
+}
+
+/** 催办 */
+export async function remindTodoApi(data: { taskId: number; comment?: string }) {
+  return request.post<ApiResponse<Record<string, any>>>('/todo/remind', null, { params: data });
+}
+
+/** 手动触发超期扫描 */
+export async function scanOverdueApi() {
+  return request.post<ApiResponse<Record<string, any>>>('/todo/scan');
+}
+
+export interface DictItem {
+  id: number;
+  dictType: string;
+  dictCode: string;
+  dictLabel: string;
+  dictValue?: string;
+  sort?: number;
+  status?: number;
+  remark?: string;
+}
+
+/** 全部字典（按类型分组） */
+export async function getDictAllApi() {
+  return request.get<ApiResponse<Record<string, DictItem[]>>>('/dict/all');
+}
+
+/** 按类型查询（含停用，管理用） */
+export async function getDictManageApi(dictType?: string) {
+  return request.get<ApiResponse<DictItem[]>>(`/dict/manage/${dictType || ''}`);
+}
+
+export async function addDictApi(data: Partial<DictItem>) {
+  return request.post<ApiResponse<number>>('/dict', data);
+}
+
+export async function updateDictApi(data: Partial<DictItem>) {
+  return request.put<ApiResponse<null>>('/dict', data);
+}
+
+export async function deleteDictApi(id: number) {
+  return request.delete<ApiResponse<null>>(`/dict/${id}`);
+}
+
+export interface DataRangeConfig {
+  id?: number;
+  configName?: string;
+  datasourceId?: number;
+  sqlText?: string;
+  remark?: string;
+  status?: number;
+  createTime?: string;
+  [key: string]: any;
+}
+
+export interface DataRangeRunResult {
+  sql?: string;
+  columns?: string[];
+  rows?: Record<string, any>[];
+  rowCount?: number;
+  costMs?: number;
+}
+
+export async function getDataRangeListApi() {
+  return request.get<ApiResponse<DataRangeConfig[]>>('/dataRange/list');
+}
+
+export async function getDataRangeApi(id: number) {
+  return request.get<ApiResponse<DataRangeConfig>>(`/dataRange/${id}`);
+}
+
+export async function saveDataRangeApi(data: DataRangeConfig) {
+  return request.post<ApiResponse<number>>('/dataRange', data);
+}
+
+export async function updateDataRangeApi(data: DataRangeConfig) {
+  return request.put<ApiResponse<number>>('/dataRange', data);
+}
+
+export async function deleteDataRangeApi(id: number) {
+  return request.delete<ApiResponse<null>>(`/dataRange/${id}`);
+}
+
+/** 预览（执行配置里的 SQL） */
+export async function previewDataRangeApi(id: number, deptId?: number) {
+  return request.get<ApiResponse<DataRangeRunResult>>(`/dataRange/${id}/preview`, { params: { deptId } });
+}
+
+/** SQL 试跑（不落库） */
+export async function runDataRangeSqlApi(data: {
+  datasourceId?: number; sql: string; deptId?: number; limit?: number;
+}) {
+  return request.post<ApiResponse<DataRangeRunResult>>('/dataRange/run', data);
+}
+
+export interface OperLogItem {
+  id: number;
+  userId?: number;
+  username?: string;
+  module?: string;
+  action?: string;
+  target?: string;
+  ip?: string;
+  costMs?: number;
+  status?: number;
+  errorMsg?: string;
+  createTime?: string;
+}
+
+export async function getOperLogPageApi(params: PageParams & {
+  module?: string; action?: string; userId?: number; status?: number;
+}) {
+  return request.get<ApiResponse<{ list: OperLogItem[]; total: number }>>('/operLog/page', { params });
+}
