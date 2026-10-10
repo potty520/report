@@ -163,12 +163,12 @@ const TaskFormulationPage: React.FC = () => {
       title: '操作', key: 'action', width: 280, fixed: 'right',
       render: (_: any, record: TaskItem) => (
         <Space>
-          {record.status === 0 && (
-            <>
+          {(record.status === 0 || record.status === 1) && (
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+            )}
+            {record.status === 0 && (
               <Button type="link" size="small" icon={<SendOutlined />} style={{ color: '#52c41a' }} onClick={() => handlePublish(record.id)}>发布</Button>
-            </>
-          )}
+            )}
           {record.status === 1 && (
             <Button type="link" size="small" danger onClick={() => handleClose(record.id)}>关闭</Button>
           )}

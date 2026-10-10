@@ -3,7 +3,7 @@ import { Table, Button, Space, Tag, App, Card, Statistic, Row, Col, Input, Popco
 import { ReloadOutlined, SearchOutlined, LogoutOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
-import { getOnlineListApi, getOnlineCountApi, kickOnlineApi, OnlineUserItem } from '@/services/api';
+import { getOnlineListApi, getOnlineCountApi, kickOnlineApi, kickOnlineUserApi, OnlineUserItem } from '@/services/api';
 
 /**
  * 在线用户（含异地登录可见性 + 踢下线）。
@@ -43,10 +43,12 @@ const OnlineUserPage: React.FC = () => {
   }, []);
 
   const submitKick = async () => {
-    if (!kickTarget?.sessionId) return;
+    if (!kickTarget) return;
     try {
       const values = await form.validateFields();
-      await kickOnlineApi({ sessionId: kickTarget.sessionId, reason: values.reason });
+      await (kickTarget.userId
+        ? kickOnlineUserApi({ userId: Number(kickTarget.userId), reason: values.reason } as any)
+        : kickOnlineApi({ sessionId: kickTarget.sessionId!, reason: values.reason }));
       msg.success('已踢下线（该会话下次请求将返回 401）');
       setKickTarget(null);
       load();
