@@ -5,19 +5,31 @@ import com.reportsys.common.Result;
 import com.reportsys.model.RptTaskData;
 import com.reportsys.service.RptTaskDataService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.reportsys.annotation.OperLog;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/fill")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','FILL_USER')")
 public class FillController {
 
     @Autowired
     private RptTaskDataService rptTaskDataService;
+    @Autowired
+    private com.reportsys.service.FileStorageService fileStorageService;
 
     /**
      * 我的填报任务列表(分页)
@@ -99,6 +111,8 @@ public class FillController {
                 }
             }
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -123,6 +137,8 @@ public class FillController {
             taskData.setFileUrl(fileUrl);
             rptTaskDataService.fillData(taskData);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -132,23 +148,89 @@ public class FillController {
      * 上传附件
      */
     @PostMapping("/upload")
-    public Result<Map<String, String>> upload(@RequestParam("file") MultipartFile file) {
+    public Result<Map<String, String>> upload(@RequestParam("file") MultipartFile file,
+                                              @RequestParam(required = false) Long taskId,
+                                              @RequestParam(required = false) Long dataId) {
         try {
-            // 简单文件上传处理，返回模拟URL
-            String originalFilename = file.getOriginalFilename();
-            if (originalFilename == null || originalFilename.isEmpty()) {
-                return Result.error("文件名不能为空");
-            }
-            // 实际项目应上传到OSS/本地存储
-            String fileUrl = "/uploads/" + System.currentTimeMillis() + "_" + originalFilename;
-            java.util.Map<String, String> data = new java.util.HashMap<>();
-            data.put("fileName", originalFilename);
-            data.put("fileUrl", fileUrl);
-            data.put("fileSize", String.valueOf(file.getSize()));
+            com.reportsys.model.RptFile saved = fileStorageService.save(file, "ATTACHMENT", taskId, dataId,
+                    null, getCurrentUserId());
+            Map<String, String> data = new java.util.HashMap<>();
+            data.put("fileId", String.valueOf(saved.getId()));
+            data.put("fileName", saved.getFileName());
+            data.put("fileUrl", "/file/" + saved.getId() + "/download");
+            data.put("fileSize", String.valueOf(saved.getFileSize()));
+            data.put("md5", saved.getMd5());
             return Result.success(data);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return Result.error("文件上传失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * Excel 导入并写回目标业务库（P0-B）
+     */
+    @PostMapping("/import")
+    @OperLog(module = "数据填报", action = "Excel导入")
+    public Result<Map<String, Object>> importExcel(@RequestParam Long taskId,
+                                                    @RequestParam("file") MultipartFile file,
+                                                    @RequestParam(defaultValue = "0") int headerRowIndex) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            if (file == null || file.isEmpty()) return Result.error("请选择要导入的 Excel 文件");
+            return Result.success(rptTaskDataService.importExcel(taskId, userId, file.getBytes(), headerRowIndex));
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (Exception e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 把已提交的填报数据写回目标业务库
+     */
+    @PostMapping("/{taskId}/commit")
+    @OperLog(module = "数据填报", action = "提交入库")
+    public Result<Map<String, Object>> commitToTarget(@PathVariable Long taskId,
+                                                       @RequestParam(required = false) Long dataId) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            return Result.success(rptTaskDataService.commitToTarget(taskId, dataId, userId));
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 预览目标表已入库数据
+     */
+    @GetMapping("/{taskId}/target-rows")
+    public Result<List<Map<String, Object>>> targetRows(@PathVariable Long taskId,
+                                                         @RequestParam(defaultValue = "50") int limit) {
+        try {
+            return Result.success(rptTaskDataService.queryTargetRows(taskId, limit));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 导出任务数据（从目标物化表读取，xlsx 下载）
+     */
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(@RequestParam Long taskId) {
+        Map<String, Object> result = rptTaskDataService.exportTaskData(taskId);
+        byte[] content = (byte[]) result.get("content");
+        String fileName = URLEncoder.encode(String.valueOf(result.get("fileName")), StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(content);
     }
 
     /**

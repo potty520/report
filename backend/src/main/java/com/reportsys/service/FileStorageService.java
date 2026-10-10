@@ -1,0 +1,269 @@
+package com.reportsys.service;
+
+import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.reportsys.dao.RptFileMapper;
+import com.reportsys.model.RptFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import javax.annotation.PostConstruct;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * 本地文件存储（替代原版 FastDFS / 外部文档系统）。
+ *
+ * 目录结构：
+ *   ${report.file.root}/yyyyMMdd/{uuid}_{fileName}    正式文件
+ *   ${report.file.root}/chunks/{fileKey}/{index}.part 分片
+ *
+ * 支持：普通上传、分片上传、断点续传（查询已上传分片）、秒传（同 md5 直接复用）、下载、软删除。
+ */
+@Service
+public class FileStorageService {
+
+    private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
+
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    @Autowired
+    private RptFileMapper rptFileMapper;
+
+    @Value("${report.file.root:/opt/report/files}")
+    private String fileRoot;
+
+    @Value("${report.file.max-size-mb:200}")
+    private int maxSizeMb;
+
+    private Path root;
+
+    @PostConstruct
+    public void init() {
+        root = Paths.get(fileRoot).toAbsolutePath();
+        try {
+            Files.createDirectories(root);
+            Files.createDirectories(root.resolve("chunks"));
+            log.info("文件存储根目录: {}", root);
+        } catch (IOException e) {
+            log.error("创建文件存储目录失败: {}", e.getMessage());
+        }
+    }
+
+    public Path getRoot() {
+        return root;
+    }
+
+    /** 普通上传 */
+    @Transactional
+    public RptFile save(MultipartFile file, String fileType, Long taskId, Long dataId, Long templateId, Long uploadBy) {
+        if (file == null || file.isEmpty()) throw new RuntimeException("上传文件为空");
+        long maxBytes = (long) maxSizeMb * 1024 * 1024;
+        if (file.getSize() > maxBytes) throw new RuntimeException("文件超过 " + maxSizeMb + "MB 限制");
+        try {
+            byte[] content = file.getBytes();
+            String md5 = md5(content);
+            return store(content, safeName(file.getOriginalFilename()), file.getContentType(), md5,
+                    fileType, taskId, dataId, templateId, uploadBy);
+        } catch (IOException e) {
+            throw new RuntimeException("文件上传失败: " + e.getMessage(), e);
+        }
+    }
+
+    /** 秒传/断点续传检查：返回已上传分片与是否可秒传 */
+    public Map<String, Object> checkChunks(String fileKey, String fileName, String md5) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("fileKey", fileKey);
+        result.put("uploadedChunks", uploadedChunks(fileKey));
+        if (StrUtil.isNotBlank(md5)) {
+            RptFile exist = rptFileMapper.selectOne(Wrappers.<RptFile>lambdaQuery()
+                    .eq(RptFile::getMd5, md5).eq(RptFile::getDeleted, 0).last("limit 1"));
+            if (exist != null) {
+                result.put("skipUpload", true);
+                result.put("fileId", exist.getId());
+                result.put("fileName", exist.getFileName());
+                return result;
+            }
+        }
+        result.put("skipUpload", false);
+        return result;
+    }
+
+    public List<Integer> uploadedChunks(String fileKey) {
+        List<Integer> list = new ArrayList<>();
+        if (StrUtil.isBlank(fileKey)) return list;
+        Path dir = root.resolve("chunks").resolve(sanitize(fileKey));
+        if (!Files.isDirectory(dir)) return list;
+        try (java.util.stream.Stream<Path> stream = Files.list(dir)) {
+            stream.forEach(p -> {
+                String name = p.getFileName().toString();
+                if (name.endsWith(".part")) {
+                    try {
+                        list.add(Integer.parseInt(name.substring(0, name.length() - 5)));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            });
+        } catch (IOException e) {
+            log.warn("读取分片目录失败: {}", e.getMessage());
+        }
+        list.sort(Integer::compareTo);
+        return list;
+    }
+
+    /** 保存单个分片 */
+    public int saveChunk(String fileKey, int chunkIndex, MultipartFile chunk) {
+        if (StrUtil.isBlank(fileKey)) throw new RuntimeException("fileKey 不能为空");
+        if (chunk == null || chunk.isEmpty()) throw new RuntimeException("分片内容为空");
+        try {
+            Path dir = root.resolve("chunks").resolve(sanitize(fileKey));
+            Files.createDirectories(dir);
+            Path target = dir.resolve(chunkIndex + ".part");
+            try (InputStream in = chunk.getInputStream()) {
+                Files.copy(in, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return uploadedChunks(fileKey).size();
+        } catch (IOException e) {
+            throw new RuntimeException("分片保存失败: " + e.getMessage(), e);
+        }
+    }
+
+    /** 合并分片为正式文件并登记 */
+    @Transactional
+    public RptFile mergeChunks(String fileKey, String fileName, int chunkTotal, String fileType,
+                               Long taskId, Long dataId, Long templateId, Long uploadBy) {
+        Path dir = root.resolve("chunks").resolve(sanitize(fileKey));
+        if (!Files.isDirectory(dir)) throw new RuntimeException("没有找到分片目录，请先上传分片");
+        try {
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            for (int i = 0; i < chunkTotal; i++) {
+                Path part = dir.resolve(i + ".part");
+                if (!Files.exists(part)) throw new RuntimeException("缺少分片 " + i + "，无法合并");
+                Files.copy(part, buffer);
+            }
+            byte[] content = buffer.toByteArray();
+            String md5 = md5(content);
+            RptFile file = store(content, safeName(fileName), null, md5, fileType, taskId, dataId, templateId, uploadBy);
+            // 清理分片
+            try (java.util.stream.Stream<Path> stream = Files.list(dir)) {
+                stream.forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) { } });
+            }
+            Files.deleteIfExists(dir);
+            return file;
+        } catch (IOException e) {
+            throw new RuntimeException("分片合并失败: " + e.getMessage(), e);
+        }
+    }
+
+    private RptFile store(byte[] content, String fileName, String contentType, String md5, String fileType,
+                          Long taskId, Long dataId, Long templateId, Long uploadBy) throws IOException {
+        // 秒传：同 md5 已存在则直接复用
+        RptFile exist = rptFileMapper.selectOne(Wrappers.<RptFile>lambdaQuery()
+                .eq(RptFile::getMd5, md5).eq(RptFile::getDeleted, 0).last("limit 1"));
+        if (exist != null) {
+            log.info("命中秒传: {} -> fileId={}", fileName, exist.getId());
+            return exist;
+        }
+        String day = LocalDate.now().format(DAY);
+        Path dir = root.resolve(day);
+        Files.createDirectories(dir);
+        String stored = UUID.randomUUID().toString().replace("-", "") + "_" + fileName;
+        Path target = dir.resolve(stored);
+        Files.write(target, content);
+
+        RptFile file = new RptFile();
+        file.setTaskId(taskId);
+        file.setDataId(dataId);
+        file.setTemplateId(templateId);
+        file.setFileName(fileName);
+        file.setStorePath(root.relativize(target).toString().replace('\\', '/'));
+        file.setFileSize((long) content.length);
+        file.setFileType(StrUtil.isBlank(fileType) ? "ATTACHMENT" : fileType);
+        file.setContentType(contentType == null ? "" : contentType);
+        file.setMd5(md5);
+        file.setUploadBy(uploadBy);
+        file.setDeleted(0);
+        file.setCreateTime(LocalDateTime.now());
+        rptFileMapper.insert(file);
+        return file;
+    }
+
+    public List<RptFile> listByTask(Long taskId) {
+        return rptFileMapper.selectList(Wrappers.<RptFile>lambdaQuery()
+                .eq(RptFile::getTaskId, taskId).eq(RptFile::getDeleted, 0)
+                .orderByDesc(RptFile::getCreateTime));
+    }
+
+    public RptFile getById(Long id) {
+        RptFile file = rptFileMapper.selectById(id);
+        if (file == null || (file.getDeleted() != null && file.getDeleted() == 1)) {
+            throw new RuntimeException("文件不存在或已删除");
+        }
+        return file;
+    }
+
+    public byte[] readBytes(Long id) {
+        RptFile file = getById(id);
+        try {
+            return Files.readAllBytes(root.resolve(file.getStorePath()));
+        } catch (IOException e) {
+            throw new RuntimeException("读取文件失败: " + e.getMessage(), e);
+        }
+    }
+
+    public void writeTo(Long id, OutputStream out) {
+        byte[] bytes = readBytes(id);
+        try {
+            out.write(bytes);
+        } catch (IOException e) {
+            throw new RuntimeException("写出文件失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        RptFile file = getById(id);
+        file.setDeleted(1);
+        rptFileMapper.updateById(file);
+    }
+
+    private String safeName(String name) {
+        if (StrUtil.isBlank(name)) return "unnamed";
+        String cleaned = name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        return cleaned.length() > 120 ? cleaned.substring(cleaned.length() - 120) : cleaned;
+    }
+
+    private String sanitize(String key) {
+        return key.replaceAll("[^0-9A-Za-z_\\-]", "_");
+    }
+
+    private String md5(byte[] content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            byte[] hash = digest.digest(content);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}

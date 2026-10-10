@@ -7,10 +7,13 @@ import com.reportsys.service.RptDataApplyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/dataApply")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','FILL_USER','AUDIT_USER')")
 public class DataApplyController {
 
     @Autowired
@@ -52,6 +55,8 @@ public class DataApplyController {
             apply.setReason(reason);
             rptDataApplyService.apply(apply);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -75,6 +80,8 @@ public class DataApplyController {
     /**
      * 审批通过
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','AUDIT_USER','DEPT_ADMIN')")
+
     @PostMapping("/{id}/approve")
     public Result<Void> approve(@PathVariable Long id) {
         try {
@@ -84,6 +91,8 @@ public class DataApplyController {
             }
             rptDataApplyService.approve(id, 1, null, userId);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -92,6 +101,8 @@ public class DataApplyController {
     /**
      * 审批驳回
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','AUDIT_USER','DEPT_ADMIN')")
+
     @PostMapping("/{id}/reject")
     public Result<Void> reject(@PathVariable Long id,
                                 @RequestParam(required = false) String auditComment) {
@@ -102,6 +113,8 @@ public class DataApplyController {
             }
             rptDataApplyService.approve(id, 2, auditComment, userId);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

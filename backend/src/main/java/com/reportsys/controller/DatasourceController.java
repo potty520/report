@@ -5,12 +5,15 @@ import com.reportsys.common.Result;
 import com.reportsys.model.RptDatasource;
 import com.reportsys.service.RptDatasourceService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/datasource")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class DatasourceController {
 
     @Autowired
@@ -53,6 +56,8 @@ public class DatasourceController {
         try {
             rptDatasourceService.add(datasource);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -66,6 +71,8 @@ public class DatasourceController {
         try {
             rptDatasourceService.update(datasource);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -79,6 +86,8 @@ public class DatasourceController {
         try {
             rptDatasourceService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -107,6 +116,8 @@ public class DatasourceController {
                 return Result.success("连接成功", true);
             }
             return Result.error("连接失败");
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

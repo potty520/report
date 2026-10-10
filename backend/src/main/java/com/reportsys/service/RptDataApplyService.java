@@ -90,6 +90,10 @@ public class RptDataApplyService {
         RptDataApply apply = rptDataApplyMapper.selectById(applyId);
         if (apply == null) throw new RuntimeException("申请不存在");
         if (apply.getStatus() != 0) throw new RuntimeException("申请已处理，请勿重复操作");
+        // 安全加固：禁止自己审批自己的申请
+        if (apply.getApplicantId() != null && apply.getApplicantId().equals(auditorId)) {
+            throw new org.springframework.security.access.AccessDeniedException("不能审批自己提交的申请");
+        }
 
         apply.setStatus(status);
         apply.setAuditorId(auditorId);

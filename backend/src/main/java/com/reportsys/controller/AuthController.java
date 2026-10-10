@@ -1,9 +1,11 @@
 package com.reportsys.controller;
 
 import cn.hutool.captcha.CaptchaUtil;
+import org.springframework.security.access.AccessDeniedException;
 import cn.hutool.captcha.LineCaptcha;
 import cn.hutool.core.lang.UUID;
 import com.reportsys.common.Result;
+import com.reportsys.config.CaptchaStore;
 import com.reportsys.config.JwtTokenUtil;
 import com.reportsys.model.LoginRequest;
 import com.reportsys.model.SysMenu;
@@ -15,7 +17,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,9 @@ public class AuthController {
 
     @Autowired
     private JwtTokenUtil jwtTokenUtil;
+
+    @Autowired
+    private CaptchaStore captchaStore;
 
     /**
      * 登录
@@ -46,22 +50,38 @@ public class AuthController {
             String token = (String) serviceData.get("token");
             Long userId = Long.valueOf(serviceData.get("userId").toString());
 
-            // 组装返回给前端的数据
+            // 组装返回给前端的数据：以 Service 返回的 user 子对象为准，
+            // 原先在这里读 serviceData.get("realName"/"email"/"roles"/"permissions")
+            // 而 Service 从未放入这些 key，导致前端拿到的用户信息与权限恒为 null。
             Map<String, Object> userInfo = new HashMap<>();
-            userInfo.put("id", serviceData.get("userId"));
+            userInfo.put("id", userId);
             userInfo.put("username", loginRequest.getUsername());
-            userInfo.put("realName", serviceData.get("realName"));
-            userInfo.put("email", serviceData.get("email"));
-            userInfo.put("roles", serviceData.get("roles"));
+            Object serviceUser = serviceData.get("user");
+            if (serviceUser instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> u = (Map<String, Object>) serviceUser;
+                userInfo.put("realName", u.get("realName"));
+                userInfo.put("email", u.get("email"));
+                userInfo.put("deptId", u.get("deptId"));
+                userInfo.put("userType", u.get("userType"));
+                userInfo.put("roles", u.get("roles"));
+            }
 
             List<SysMenu> menuTree = sysUserService.getUserMenuTree(userId);
+
+            Object permissions = serviceData.get("permissions");
+            if (!(permissions instanceof List)) {
+                permissions = new java.util.ArrayList<String>();
+            }
 
             Map<String, Object> data = new HashMap<>();
             data.put("token", token);
             data.put("userInfo", userInfo);
-            data.put("permissions", serviceData.get("permissions"));
+            data.put("permissions", permissions);
             data.put("menus", menuTree);
             return Result.success(data);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -77,17 +97,23 @@ public class AuthController {
 
     /**
      * 获取验证码
+     *
+     * 注意：验证码写入 CaptchaStore（与登录校验共用同一份存储），
+     * 不再写入 HttpSession —— 原实现因两处存储不同而完全失效。
      */
     @GetMapping("/captcha")
-    public Result<Map<String, Object>> captcha(HttpSession session) {
+    public Result<Map<String, Object>> captcha() {
         LineCaptcha captcha = CaptchaUtil.createLineCaptcha(120, 40, 4, 10);
         String code = captcha.getCode();
         String uuid = UUID.randomUUID().toString().replace("-", "");
-        session.setAttribute("CAPTCHA_" + uuid, code);
+        captchaStore.put(uuid, code);
 
+        String image = "data:image/png;base64," + captcha.getImageBase64();
         Map<String, Object> data = new HashMap<>();
         data.put("uuid", uuid);
-        data.put("captchaImage", "data:image/png;base64," + captcha.getImageBase64());
+        data.put("captchaImage", image);
+        // 兼容旧版前端 (frontend/) 读取的字段名
+        data.put("img", image);
         return Result.success(data);
     }
 
@@ -129,6 +155,8 @@ public class AuthController {
             }
             sysUserService.updatePwd(userId, oldPassword, newPassword);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

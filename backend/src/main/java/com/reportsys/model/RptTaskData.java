@@ -22,6 +22,25 @@ public class RptTaskData {
     private String auditComment;
     private Long auditUserId;
     private LocalDateTime auditTime;
+    /** 落库状态 0未入库 1成功 2失败（P0-A） */
+    private Integer inboundStatus;
+    private LocalDateTime inboundTime;
+    private Integer inboundRows;
+    private String errorMsg;
+    /** 部门审核（双通道第一级，P0-C） */
+    private Integer deptAuditStatus;
+    private Long deptAuditUserId;
+    private LocalDateTime deptAuditTime;
+    private String deptAuditComment;
+    /** 任务方审核（双通道第二级，P0-C） */
+    private Integer taskAuditStatus;
+    private Long taskAuditUserId;
+    private LocalDateTime taskAuditTime;
+    private String taskAuditComment;
+    /** 补正状态 0无 1进行中 2已完成 */
+    private Integer correctStatus;
+    private Integer correctWay;
+    private String correctComment;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

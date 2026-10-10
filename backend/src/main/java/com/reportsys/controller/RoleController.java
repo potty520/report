@@ -5,12 +5,15 @@ import com.reportsys.common.Result;
 import com.reportsys.model.SysRole;
 import com.reportsys.service.SysRoleService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/role")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class RoleController {
 
     @Autowired
@@ -52,6 +55,8 @@ public class RoleController {
         try {
             sysRoleService.add(role);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -65,6 +70,8 @@ public class RoleController {
         try {
             sysRoleService.update(role);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -78,6 +85,8 @@ public class RoleController {
         try {
             sysRoleService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -91,6 +100,8 @@ public class RoleController {
         try {
             sysRoleService.assignMenus(id, menuIds);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }

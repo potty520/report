@@ -3,12 +3,14 @@ package com.reportsys.controller;
 import com.reportsys.common.Result;
 import com.reportsys.model.SysLoginLog;
 import com.reportsys.service.SysLoginLogService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 
 @RestController
 @RequestMapping("/system/log")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class LogController {
 
     @Resource

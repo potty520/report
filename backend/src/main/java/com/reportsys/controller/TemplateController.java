@@ -6,14 +6,25 @@ import com.reportsys.model.RptTemplate;
 import com.reportsys.model.RptTemplateField;
 import com.reportsys.service.RptTemplateService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.reportsys.annotation.OperLog;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/template")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
 public class TemplateController {
 
     @Autowired
@@ -68,7 +79,7 @@ public class TemplateController {
      * 新增模板
      */
     @PostMapping
-    public Result<Void> add(@RequestBody RptTemplate template) {
+    public Result<Long> add(@RequestBody RptTemplate template) {
         try {
             Long userId = getCurrentUserId();
             if (userId != null) {
@@ -76,8 +87,11 @@ public class TemplateController {
             }
             List<RptTemplateField> fields = template.getFields();
             template.setFields(null);
-            rptTemplateService.add(template, fields);
-            return Result.success();
+            Long id = rptTemplateService.add(template, fields);
+            // 返回主键：前端保存后可直接物化/下载模板
+            return Result.success(id);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -93,6 +107,8 @@ public class TemplateController {
             template.setFields(null);
             rptTemplateService.update(template, fields);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -106,6 +122,8 @@ public class TemplateController {
         try {
             rptTemplateService.deleteById(id);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -119,14 +137,17 @@ public class TemplateController {
         try {
             rptTemplateService.deploy(id, status);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
     }
 
     /**
-     * 审核
+     * 审核（模板审核属管理动作，仅超级管理员）
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}/audit")
     public Result<Void> audit(@PathVariable Long id,
                                @RequestParam Integer auditStatus,
@@ -134,6 +155,8 @@ public class TemplateController {
         try {
             rptTemplateService.audit(id, auditStatus);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -164,6 +187,8 @@ public class TemplateController {
             }
             rptTemplateService.update(template, fields);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -189,9 +214,86 @@ public class TemplateController {
             }
             rptTemplateService.update(template, null);
             return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
+    }
+
+    /**
+     * 按模板编码查询（前端保存后按编码回查，避免模糊匹配）
+     */
+    @GetMapping("/by-code")
+    public Result<RptTemplate> getByCode(@RequestParam String templateCode) {
+        try {
+            RptTemplate template = rptTemplateService.getByCode(templateCode);
+            if (template == null) return Result.error("模板不存在");
+            return Result.success(template);
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 解析上传的 Excel 模板表头，返回字段建议（P0-A）
+     */
+    @PostMapping("/parse-excel")
+    public Result<Map<String, Object>> parseExcel(@RequestParam("file") MultipartFile file,
+                                                   @RequestParam(defaultValue = "0") int headerRowIndex) {
+        try {
+            if (file == null || file.isEmpty()) return Result.error("请选择 Excel 模板文件");
+            return Result.success(rptTemplateService.parseTemplateExcel(file.getInputStream(), headerRowIndex));
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (Exception e) {
+            return Result.error("模板解析失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 物化到目标业务库（建表）；recreate=true 先删后建
+     */
+    @PostMapping("/{id}/materialize")
+    @OperLog(module = "模板管理", action = "物化建表")
+    public Result<Map<String, Object>> materialize(@PathVariable Long id,
+                                                    @RequestParam(defaultValue = "false") boolean recreate) {
+        try {
+            return Result.success(rptTemplateService.materialize(id, recreate));
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 删除物化表
+     */
+    @DeleteMapping("/{id}/materialize")
+    @OperLog(module = "模板管理", action = "删除物化表")
+    public Result<Void> dropMaterialize(@PathVariable Long id) {
+        try {
+            rptTemplateService.dropMaterialized(id);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 下载模板文件（xlsx）
+     */
+    @GetMapping("/{id}/download")
+    public ResponseEntity<byte[]> download(@PathVariable Long id) {
+        byte[] content = rptTemplateService.downloadTemplate(id);
+        String fileName = URLEncoder.encode("template-" + id + ".xlsx", StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(content);
     }
 
     /**

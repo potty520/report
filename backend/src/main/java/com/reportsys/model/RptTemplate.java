@@ -24,6 +24,9 @@ public class RptTemplate {
     private Integer auditStatus;
     private String auditComment;
     private Long createBy;
+    /** 是否已物化到目标数据源（P0-A） */
+    private Integer materialized;
+    private LocalDateTime materializedTime;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

@@ -12,9 +12,11 @@ spring:
     name: report-system
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://103.236.96.82:13306/report_system?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: remote
-    password: ToCAt69Aidc16I1KvkQo2YWMlUl01U0o
+    # 安全加固：凭证一律从环境变量注入，禁止再写入仓库
+    #   REPORT_DB_URL / REPORT_DB_USERNAME / REPORT_DB_PASSWORD
+    url: ${REPORT_DB_URL:jdbc:mysql://127.0.0.1:3306/report_system?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${REPORT_DB_USERNAME:report}
+    password: ${REPORT_DB_PASSWORD:}
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       initial-size: 5
@@ -24,20 +26,9 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
     default-property-inclusion: non_null
-#  redis:
-#    host: 127.0.0.1
-#    port: 6379
-#    password: zkzj102426
-#    timeout: 3000ms
-#    lettuce:
-#      pool:
-#        max-active: 8
-#        max-idle: 8
-#        min-idle: 0
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.cache.RedisCacheManagerCustomizer
 
 mybatis-plus:
   configuration:
@@ -46,6 +37,27 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
+
+# ---------------------------------------------------------------------------
+# 安全相关配置（全部走环境变量；空值时的行为见各组件注释）
+#   REPORT_JWT_SECRET                JWT 签名密钥，≥32 字节，必填（缺省拒绝启动）
+#   REPORT_CRYPTO_KEY                敏感字段 AES/GCM 密钥，≥16 位；缺省则明文存储并告警
+#   REPORT_CAPTCHA_FIXED_CODE        仅供自动化测试的固定验证码；留空=关闭
+#   REPORT_DS_TEST_ALLOWED_HOSTS     允许做连接测试的主机白名单（逗号分隔）；留空=不限制
+# ---------------------------------------------------------------------------
+report:
+  jwt:
+    secret: ${REPORT_JWT_SECRET:}
+    expire-hours: ${REPORT_JWT_EXPIRE_HOURS:24}
+  crypto:
+    key: ${REPORT_CRYPTO_KEY:}
+  captcha:
+    fixed-code: ${REPORT_CAPTCHA_FIXED_CODE:}
+  datasource:
+    test:
+      allowed-hosts: ${REPORT_DS_TEST_ALLOWED_HOSTS:}
+      connect-timeout-ms: ${REPORT_DS_TEST_CONNECT_TIMEOUT_MS:3000}
+      socket-timeout-ms: ${REPORT_DS_TEST_SOCKET_TIMEOUT_MS:5000}
 
 logging:
   level:
