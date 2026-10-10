@@ -47,6 +47,8 @@ public class RptTaskDataService {
     private ProcessLogService processLog;
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @Autowired
+    private QualityReportService qualityReportService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -668,6 +670,9 @@ public class RptTaskDataService {
         if (data.getDeptAuditStatus() == null || data.getDeptAuditStatus() != 1) {
             throw new RuntimeException("部门审核未通过，不能进行任务方审核");
         }
+        // 质检拦截（可插拔）：report.quality.required=true 时，未通过质检不允许审核
+        // （对应原版「报告未生成不可审核」）；默认 false，不影响现有流程。
+        qualityReportService.assertCanAudit(dataId);
         authz.assertCanAudit(data.getTaskId(), data.getFillUserId(), auditorId);
         if (data.getTaskAuditStatus() != null && data.getTaskAuditStatus() != 0) {
             throw new RuntimeException("任务方已审核，请勿重复操作");

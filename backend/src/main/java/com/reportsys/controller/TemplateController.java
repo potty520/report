@@ -5,6 +5,8 @@ import com.reportsys.common.Result;
 import com.reportsys.model.RptTemplate;
 import com.reportsys.model.RptTemplateField;
 import com.reportsys.service.RptTemplateService;
+import com.reportsys.service.TemplateAuthService;
+import com.reportsys.service.AuthzService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -30,6 +32,12 @@ public class TemplateController {
     @Autowired
     private RptTemplateService rptTemplateService;
 
+    @Autowired
+    private TemplateAuthService templateAuthService;
+
+    @Autowired
+    private AuthzService authzService;
+
     /**
      * 分页列表
      */
@@ -52,6 +60,11 @@ public class TemplateController {
                 if (auditStatus != null) {
                     list.removeIf(t -> !auditStatus.equals(t.getAuditStatus()));
                 }
+                // 模板两级授权：设置过授权的模板仅授权部门/用户可见（超级管理员不受限）
+                if (!authzService.hasAnyRole("SUPER_ADMIN")) {
+                    java.util.Set<Long> allowed = templateAuthService.accessibleTemplateIds(getCurrentUserId());
+                    list.removeIf(t -> !allowed.contains(t.getId()));
+                }
             }
             return Result.success(result);
         } catch (Exception e) {
@@ -65,6 +78,11 @@ public class TemplateController {
     @GetMapping("/{id}")
     public Result<RptTemplate> getById(@PathVariable Long id) {
         try {
+            // 模板两级授权：无权访问的模板按"不存在"处理，避免越权读取字段定义
+            if (!authzService.hasAnyRole("SUPER_ADMIN")
+                    && !templateAuthService.canAccess(id, getCurrentUserId())) {
+                return Result.error("无权访问该模板");
+            }
             RptTemplate template = rptTemplateService.getById(id);
             if (template == null) {
                 return Result.error("模板不存在");
