@@ -101,8 +101,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         // 在线用户/踢下线：按 jti 检查会话是否已被管理员下线（表未迁移时 isKicked 恒为 false）
         String sessionId = jwtTokenUtil.getSessionId(token);
-        if (sessionId != null && isKicked(sessionId)) {
-            writeError(response, 401, "该会话已被管理员下线，请重新登录");
+        // 会话白名单（第二轮安全修复）：token 里的 sessionId 必须对应"在线"会话记录，
+        // 否则拒绝——这样登出、被踢、会话被清理后 token 立即失效，
+        // 修复"logout 后 JWT 仍可继续调用接口"的问题。
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            writeError(response, 401, "会话信息缺失，请重新登录");
+            return;
+        }
+        String sessionState = sessionState(sessionId);
+        if ("OFFLINE".equals(sessionState)) {
+            writeError(response, 401, "该会话已下线（登出或被管理员踢出），请重新登录");
+            return;
+        }
+        if ("MISSING".equals(sessionState)) {
+            writeError(response, 401, "会话已失效，请重新登录");
             return;
         }
         request.setAttribute("sessionId", sessionId);
@@ -153,6 +165,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         authorities = Collections.unmodifiableList(authorities);
         roleCache.put(userId, new CachedRoles(authorities, now));
         return authorities;
+    }
+
+    /** 会话状态：ONLINE / OFFLINE / MISSING（查不到即 MISSING，用于白名单校验） */
+    private String sessionState(String sessionId) {
+        try {
+            List<Integer> status = jdbcTemplate.queryForList(
+                    "SELECT status FROM rpt_online_user WHERE session_id = ? ORDER BY id DESC LIMIT 1",
+                    Integer.class, sessionId);
+            if (status.isEmpty() || status.get(0) == null) {
+                return "MISSING";
+            }
+            return status.get(0) == 1 ? "ONLINE" : "OFFLINE";
+        } catch (Exception e) {
+            // 在线表不可用时按在线处理，避免整体不可用
+            return "ONLINE";
+        }
     }
 
     /** 会话是否已被踢下线；表不存在/无记录时放行（兼容历史 token） */

@@ -12,7 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/dataApply")
+@RequestMapping({"/dataApply", "/data-apply"})
 @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','FILL_USER','AUDIT_USER')")
 public class DataApplyController {
 
@@ -65,7 +65,7 @@ public class DataApplyController {
     /**
      * 待审批列表
      */
-    @GetMapping("/approveList")
+    @GetMapping({"/approveList", "/approve/page"})
     public Result<PageResult<RptDataApply>> approveList(@RequestParam(defaultValue = "1") int page,
                                                          @RequestParam(defaultValue = "10") int pageSize) {
         try {

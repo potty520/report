@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/project")
+@RequestMapping({"/project", "/org/project"})
 @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
 public class ProjectController {
 
@@ -78,6 +78,13 @@ public class ProjectController {
     /**
      * 删除项目
      */
+    /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
+    @PutMapping("/{id}")
+    public Result<Void> updateById(@PathVariable Long id, @RequestBody SysProject project) {
+        project.setId(id);
+        return update(project);
+    }
+
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {

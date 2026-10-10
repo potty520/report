@@ -89,6 +89,13 @@ public class TaskController {
     /**
      * 删除任务
      */
+    /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
+    @PutMapping("/{id}")
+    public Result<Void> updateById(@PathVariable Long id, @RequestBody RptTask task) {
+        task.setId(id);
+        return update(task);
+    }
+
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {
