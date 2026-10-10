@@ -17,6 +17,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * 操作审计切面（P2-G，替代原版三套注解+切面的落库部分）。
@@ -83,6 +84,20 @@ public class OperLogAspect {
     }
 
     private String currentUsername() {
+        // 缺陷修复：principal 里放的是 userId，直接取值会把"操作人"记成 "1"；
+        // 这里按 userId 反查用户名，查不到再回落。
+        Long userId = currentUserId();
+        if (userId != null) {
+            try {
+                List<String> names = jdbcTemplate.queryForList(
+                        "SELECT username FROM sys_user WHERE id = ?", String.class, userId);
+                if (!names.isEmpty() && StrUtil.isNotBlank(names.get(0))) {
+                    return names.get(0);
+                }
+            } catch (Exception ignored) {
+                // 查不到就回落，不影响业务
+            }
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth == null ? "" : StrUtil.nullToEmpty(String.valueOf(auth.getPrincipal()));
     }

@@ -16,7 +16,9 @@ import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -205,10 +207,18 @@ public class RptTemplateService {
         template.setAuditStatus(0); // 待审
         rptTemplateMapper.insert(template);
 
-        // 保存字段
+        // 保存字段（缺陷修复：后端也要校验编码唯一，不能只靠前端拦）
         if (fields != null && !fields.isEmpty()) {
+            Set<String> codes = new HashSet<>();
             int sort = 0;
             for (RptTemplateField field : fields) {
+                String code = field.getFieldCode();
+                if (code == null || code.trim().isEmpty()) {
+                    throw new RuntimeException("第 " + (sort + 1) + " 个字段缺少字段编码");
+                }
+                if (!codes.add(code.trim().toLowerCase())) {
+                    throw new RuntimeException("字段编码重复：" + code + "（字段编码必须唯一）");
+                }
                 field.setTemplateId(template.getId());
                 field.setSort(sort++);
                 rptTemplateFieldMapper.insert(field);

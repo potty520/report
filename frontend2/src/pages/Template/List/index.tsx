@@ -94,6 +94,11 @@ const TemplateListPage: React.FC = () => {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/template/detail/${record.id}`)}>详情</Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/template/detail/${record.id}`)}>编辑</Button>
           <Button type="link" size="small" onClick={() => setAuthModal({ open: true, id: record.id, name: record.name })}>授权</Button>
+          {record.status !== 1 && (
+            <Popconfirm title="发布后即可用于建任务，确定发布?" onConfirm={() => handleStatusToggle(record.id, true)} okText="发布" cancelText="取消">
+              <Button type="link" size="small">发布</Button>
+            </Popconfirm>
+          )}
           <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>

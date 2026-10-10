@@ -11,6 +11,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import {
   createTemplateApi, getDatasourceListApi, materializeTemplateApi, parseTemplateExcelApi,
+  updateTemplateStatusApi,
   type TemplateSaveField,
 } from '@/services/api';
 
@@ -70,7 +71,8 @@ export default function TemplateWizard() {
   const [datasourceList, setDatasourceList] = useState<Array<Record<string, any>>>([]);
   const [parsing, setParsing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<{ id: number; tableName: string } | null>(null);
+  const [done, setDone] = useState<{ id: number; tableName: string; published?: boolean } | null>(null);
+  const [publish, setPublish] = useState(true);
 
   useEffect(() => {
     getDatasourceListApi({ page: 1, pageSize: 100 })
@@ -220,7 +222,17 @@ export default function TemplateWizard() {
         const m: any = await materializeTemplateApi(newId, materialize.recreate);
         tableName = m?.data?.data?.tableName || '';
       }
-      setDone({ id: newId, tableName });
+      let published = false;
+      if (publish) {
+        // 缺陷修复：向导产物默认草稿，列表页没有发布入口会卡住"模板未启用"，这里直接发布
+        try {
+          await updateTemplateStatusApi(newId, 1);
+          published = true;
+        } catch (e) {
+          message.warning('模板已创建，但自动发布失败，请在列表页点「发布」');
+        }
+      }
+      setDone({ id: newId, tableName, published });
       message.success(materialize.doIt ? '模板创建并物化成功' : '模板创建成功');
     } catch (e: any) {
       message.error(e?.message || '创建失败');
@@ -305,7 +317,7 @@ export default function TemplateWizard() {
         <Result
           status="success"
           title={`模板已创建（ID ${done.id}）`}
-          subTitle={done.tableName ? `已物化到目标库，表名：${done.tableName}` : '未物化（可在模板列表中随时物化）'}
+          subTitle={`${done.tableName ? `已物化到目标库，表名：${done.tableName}` : '未物化（可在模板列表中随时物化）'}${done.published ? ' · 已发布' : ' · 仍为草稿（未发布）'}`}
           extra={[
             <Button type="primary" key="list" onClick={() => navigate('/template/list')}>返回模板列表</Button>,
             <Button key="detail" onClick={() => navigate(`/template/detail/${done.id}`)}>查看模板详情</Button>,
@@ -477,6 +489,10 @@ export default function TemplateWizard() {
             </Descriptions.Item>
             <Descriptions.Item label="目标表名">{materialize.tableName || `t_${info.templateCode.toLowerCase()}`}</Descriptions.Item>
             <Descriptions.Item label="立即物化">{materialize.doIt ? (materialize.recreate ? '是（先删后建）' : '是') : '否'}</Descriptions.Item>
+            <Descriptions.Item label="创建后立即发布">
+              <Switch size="small" checked={publish} onChange={setPublish} />
+              <span style={{ color: '#888', marginLeft: 8 }}>不发布则为草稿，建任务时会提示"模板未启用"</span>
+            </Descriptions.Item>
             <Descriptions.Item label="说明" span={2}>{info.description || '-'}</Descriptions.Item>
           </Descriptions>
           <Table<WizardField>
