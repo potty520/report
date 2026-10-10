@@ -64,6 +64,29 @@ report:
       allowed-hosts: ${REPORT_DS_TEST_ALLOWED_HOSTS:}
       connect-timeout-ms: ${REPORT_DS_TEST_CONNECT_TIMEOUT_MS:3000}
       socket-timeout-ms: ${REPORT_DS_TEST_SOCKET_TIMEOUT_MS:5000}
+  # 短信催办（可插拔通道）：默认关闭，只写 rpt_sms_log 不真正发送。
+  #   开启：REPORT_SMS_ENABLED=true，并把 provider 切到 chunlan 且提供账号凭据
+  sms:
+    enabled: ${REPORT_SMS_ENABLED:false}
+    provider: ${REPORT_SMS_PROVIDER:log}
+    template:
+      todo: ${REPORT_SMS_TEMPLATE_TODO:}
+      overdue: ${REPORT_SMS_TEMPLATE_OVERDUE:}
+      correct: ${REPORT_SMS_TEMPLATE_CORRECT:}
+    chunlan:
+      url: ${REPORT_SMS_CHUNLAN_URL:https://smssh1.253.com/msg/v1/send/json}
+      account: ${REPORT_SMS_ACCOUNT:}
+      password: ${REPORT_SMS_PASSWORD:}
+  # 外部质检报告服务（可插拔）：默认 none 且不拦截审核
+  #   启用：REPORT_QUALITY_PROVIDER=http 且配置 REPORT_QUALITY_URL；
+  #   开启审核拦截：REPORT_QUALITY_REQUIRED=true
+  quality:
+    provider: ${REPORT_QUALITY_PROVIDER:none}
+    required: ${REPORT_QUALITY_REQUIRED:false}
+    url: ${REPORT_QUALITY_URL:}
+    token: ${REPORT_QUALITY_TOKEN:}
+    submit-path: ${REPORT_QUALITY_SUBMIT_PATH:/submit}
+    query-path: ${REPORT_QUALITY_QUERY_PATH:/query}
 
 logging:
   level:

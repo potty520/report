@@ -44,6 +44,8 @@ public class TodoService {
     private RptTaskMapper rptTaskMapper;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private SmsService smsService;
 
     /** 发一条站内消息 */
     @Transactional
@@ -144,7 +146,7 @@ public class TodoService {
         return unread.size();
     }
 
-    /** 催办：给任务填报人发催办消息 */
+    /** 催办：给任务填报人发催办消息（站内消息 + 可插拔短信通道） */
     @Transactional
     public Map<String, Object> remind(Long taskId, String comment, Long operatorId) {
         RptTask task = rptTaskMapper.selectById(taskId);
@@ -152,9 +154,33 @@ public class TodoService {
         String title = "【催办】" + task.getTaskName();
         String content = StrUtil.isBlank(comment) ? "请尽快完成填报并提交。" : comment;
         int sent = notifyAssignees(taskId, title, content, "REMIND", operatorId);
+
+        // 短信催办：走可插拔通道（REPORT_SMS_ENABLED=false 时只记 rpt_sms_log，不真正发送）。
+        // 短信失败不影响站内消息与主流程。
+        List<Map<String, Object>> smsResults = new ArrayList<>();
+        try {
+            List<Map<String, Object>> phones = jdbcTemplate.queryForList(
+                    "SELECT DISTINCT u.id AS userId, u.phone AS phone FROM rpt_task_assign a "
+                            + "JOIN sys_user u ON u.id = a.user_id "
+                            + "WHERE a.task_id = ? AND a.assign_type = 'FILL' "
+                            + "AND u.phone IS NOT NULL AND u.phone <> ''", taskId);
+            for (Map<String, Object> row : phones) {
+                Object uid = row.get("userId");
+                Long recipient = uid instanceof Number ? ((Number) uid).longValue() : null;
+                smsResults.add(smsService.sendRemind(String.valueOf(row.get("phone")),
+                        task.getTaskName(), content, recipient, taskId));
+            }
+        } catch (Exception e) {
+            log.warn("短信催办失败（不影响站内消息）: {}", e.getMessage());
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("taskId", taskId);
         result.put("sent", sent);
+        result.put("smsSent", smsResults.size());
+        result.put("smsProvider", smsService.currentProvider());
+        result.put("smsEnabled", smsService.isEnabled());
+        result.put("sms", smsResults);
         return result;
     }
 

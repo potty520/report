@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 
 //@Component  // 数据已通过SQL初始化，注释掉避免重复插入
+// 注意：本类当前未被 Spring 装配（上面的 @Component 已注释），以下内容仅作为"初始数据/结构"的
+// 权威描述与将来重新启用时的种子数据；线上实际以 docs/report_2.0_upgrade*.sql 迁移脚本为准。
 public class DataInitializer implements CommandLineRunner {
 
     @Resource
@@ -16,6 +18,23 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        try {
+            // 结构保障（幂等）：新增表用 CREATE TABLE IF NOT EXISTS，
+            // 避免漏跑迁移脚本时启动即报错。
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS rpt_template_auth ("
+                    + "id BIGINT NOT NULL AUTO_INCREMENT,"
+                    + "template_id BIGINT NOT NULL COMMENT '模板ID',"
+                    + "auth_type VARCHAR(16) NOT NULL COMMENT 'DEPT=部门 USER=用户',"
+                    + "target_id BIGINT NOT NULL COMMENT '部门ID或用户ID',"
+                    + "create_by BIGINT DEFAULT NULL,"
+                    + "create_time DATETIME DEFAULT CURRENT_TIMESTAMP,"
+                    + "PRIMARY KEY (id),"
+                    + "UNIQUE KEY uk_template_auth (template_id, auth_type, target_id),"
+                    + "KEY idx_template_auth_target (auth_type, target_id)"
+                    + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模板两级授权（部门/用户）'");
+        } catch (Exception e) {
+            // 表已存在或无权限时忽略
+        }
         try {
             // Check if admin already exists
             Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM sys_user WHERE username = 'admin'", Integer.class);
