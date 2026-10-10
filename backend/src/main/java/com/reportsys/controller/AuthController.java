@@ -11,6 +11,7 @@ import com.reportsys.model.LoginRequest;
 import com.reportsys.model.SysMenu;
 import com.reportsys.model.SysUser;
 import com.reportsys.service.SysUserService;
+import com.reportsys.service.OnlineUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,6 +34,9 @@ public class AuthController {
 
     @Autowired
     private CaptchaStore captchaStore;
+
+    @Autowired
+    private OnlineUserService onlineUserService;
 
     /**
      * 登录
@@ -79,6 +83,12 @@ public class AuthController {
             data.put("userInfo", userInfo);
             data.put("permissions", permissions);
             data.put("menus", menuTree);
+
+            // 在线用户登记 + 异地登录检测（表未迁移时自动降级，不影响登录）
+            Map<String, Object> online = onlineUserService.onLogin(userId, loginRequest.getUsername(),
+                    jwtTokenUtil.getSessionId(token), ip, request.getHeader("User-Agent"));
+            data.put("otherSessions", online.get("otherSessions"));
+            data.put("loginWarning", online.get("warning"));
             return Result.success(data);
         } catch (AccessDeniedException e) {
             throw e;

@@ -93,6 +93,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        // 在线用户/踢下线：按 jti 检查会话是否已被管理员下线（表未迁移时 isKicked 恒为 false）
+        String sessionId = jwtTokenUtil.getSessionId(token);
+        if (sessionId != null && isKicked(sessionId)) {
+            writeError(response, 401, "该会话已被管理员下线，请重新登录");
+            return;
+        }
+        request.setAttribute("sessionId", sessionId);
+
         request.setAttribute("userId", userId);
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(userId, null, loadAuthorities(userId));
@@ -123,6 +131,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         authorities = Collections.unmodifiableList(authorities);
         roleCache.put(userId, new CachedRoles(authorities, now));
         return authorities;
+    }
+
+    /** 会话是否已被踢下线；表不存在/无记录时放行（兼容历史 token） */
+    private boolean isKicked(String sessionId) {
+        try {
+            List<Integer> status = jdbcTemplate.queryForList(
+                    "SELECT status FROM rpt_online_user WHERE session_id = ? ORDER BY id DESC LIMIT 1",
+                    Integer.class, sessionId);
+            return !status.isEmpty() && status.get(0) != null && status.get(0) == 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void writeError(HttpServletResponse response, int code, String msg) throws IOException {
