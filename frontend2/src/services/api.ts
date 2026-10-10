@@ -135,7 +135,7 @@ export interface MenuFormParams {
   id?: number;
   parentId: number;
   menuName: string;
-  menuType: number;
+  menuType: string; // C=页面 M=目录 F=按钮
   path?: string;
   component?: string;
   icon?: string;

@@ -149,7 +149,7 @@ const MenuPage: React.FC = () => {
       render: (_: any, record: MenuTreeItem & { level: number }) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-          {record.menuType !== 2 && (
+          {record.menuType !== 'F' && (
             <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => handleAdd(record.id)}>添加</Button>
           )}
           <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)} okText="确定" cancelText="取消">
