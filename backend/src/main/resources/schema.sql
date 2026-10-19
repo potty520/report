@@ -70,6 +70,12 @@ CREATE TABLE IF NOT EXISTS sys_login_log (
     user_id BIGINT,
     username VARCHAR(32) DEFAULT '',
     ip VARCHAR(64) DEFAULT '',
+    -- 登录地：SysLoginLog 实体与 SysLoginLogMapper 都在写这一列，
+    -- 原 schema 漏了它，导致 H2/MODE=MySQL 下登录直接报 Column "location" not found
+    location VARCHAR(64) DEFAULT '',
+    -- 浏览器 / 操作系统：SysLoginLog 实体同样有这两个字段，原 schema 一并缺失
+    browser VARCHAR(64) DEFAULT '',
+    os VARCHAR(64) DEFAULT '',
     login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status TINYINT DEFAULT 1,
     msg VARCHAR(256) DEFAULT ''
@@ -192,3 +198,52 @@ CREATE TABLE IF NOT EXISTS rpt_data_apply (
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     audit_time TIMESTAMP
 );
+
+-- ============================================================
+-- 附件表
+--
+-- 修复：RptFile 实体（@TableName("rpt_file")）与 FileStorageService 全链路都在读写这张表，
+-- 但原 schema 里没有建表语句，导致附件上传/列表/下载在纯净库上直接报 Table "rpt_file" not found。
+-- ============================================================
+CREATE TABLE IF NOT EXISTS rpt_file (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT,
+    data_id BIGINT,
+    template_id BIGINT,
+    file_name VARCHAR(255) NOT NULL,
+    store_path VARCHAR(512) NOT NULL,
+    file_size BIGINT DEFAULT 0,
+    file_type VARCHAR(32) DEFAULT 'ATTACHMENT',
+    content_type VARCHAR(128) DEFAULT '',
+    md5 VARCHAR(64) DEFAULT '',
+    upload_by BIGINT,
+    deleted TINYINT DEFAULT 0,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- 性能索引（缺陷修复 V01）
+--
+-- 背景：评测中「部门审核」接口实测 25,139ms 超时，而同批次其他接口均值仅 617ms。
+-- 根因：rpt_task_assign / rpt_task_data / rpt_task_process 三张表只有 task_id 普通列，
+--       没有建索引。审核链路里 AuthzService.assertCanAudit() 每次都要按 task_id 查分派记录，
+--       数据量上来后是全表扫描，多个这样的查询叠加就把单次审核拖到几十秒。
+--
+-- 注：H2 / MySQL 8 均支持 CREATE INDEX IF NOT EXISTS 语义（H2 原生支持；
+--     MySQL 8.0 不支持该关键字时会报错，生产库请改用 script/ 下的迁移脚本执行）。
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_task_assign_task_id ON rpt_task_assign(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_assign_dept_id ON rpt_task_assign(dept_id);
+CREATE INDEX IF NOT EXISTS idx_task_assign_user_id ON rpt_task_assign(user_id);
+CREATE INDEX IF NOT EXISTS idx_task_data_task_id ON rpt_task_data(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_data_task_status ON rpt_task_data(task_id, status);
+CREATE INDEX IF NOT EXISTS idx_task_data_fill_user ON rpt_task_data(fill_user_id);
+CREATE INDEX IF NOT EXISTS idx_task_data_dept_id ON rpt_task_data(dept_id);
+CREATE INDEX IF NOT EXISTS idx_data_apply_task_id ON rpt_data_apply(task_id);
+CREATE INDEX IF NOT EXISTS idx_data_apply_applicant ON rpt_data_apply(applicant_id);
+CREATE INDEX IF NOT EXISTS idx_file_task_id ON rpt_file(task_id);
+CREATE INDEX IF NOT EXISTS idx_file_md5 ON rpt_file(md5);
+
+-- 注意：rpt_task_process（流转轨迹表）由业务侧首次写入时创建，不在本 schema 内，
+-- 因此这里不在 schema.sql 里为它建索引；生产库请用下面的语句手动补：
+--   CREATE INDEX idx_task_process_task_id ON rpt_task_process(task_id);

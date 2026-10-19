@@ -147,8 +147,12 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     public Result<?> updatePwd(Long userId, String oldPassword, String newPassword) {
         SysUser user = userMapper.selectById(userId);
         if (user == null) return Result.error("用户不存在");
-        if (newPassword == null || newPassword.trim().length() < 6) return Result.error("新密码长度不能少于6位");
-        if (!passwordEncoder.matches(oldPassword, user.getPassword())) return Result.error("原密码错误");
+        // 缺陷修复(U10)：原判断只要求长度 >= 6，123456 也能通过；改为统一密码策略
+        String pwdError = com.reportsys.common.PasswordPolicy.check(newPassword);
+        if (pwdError != null) return Result.error(pwdError);
+        if (oldPassword == null || !passwordEncoder.matches(oldPassword, user.getPassword())) return Result.error("原密码错误");
+        // 新密码不能与旧密码相同，避免"改了个寂寞"
+        if (newPassword.equals(oldPassword)) return Result.error("新密码不能与原密码相同");
         user.setPassword(passwordEncoder.encode(newPassword));
         userMapper.updateById(user);
         return Result.success("密码修改成功");
@@ -172,9 +176,16 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     }
 
     public Result<?> addUser(SysUser user) {
+        // 缺陷修复(U06)：必填校验前置，避免缺 username 时穿透到 DAO 抛 SQLException 原文
+        if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
+            return Result.error("用户名不能为空");
+        }
         if (userMapper.selectCount(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, user.getUsername())) > 0)
             return Result.error("用户名已存在");
-        user.setPassword(passwordEncoder.encode(user.getPassword() != null ? user.getPassword() : "123456"));
+        // 缺陷修复(U10)：不再使用 123456 兜底默认密码，必须显式给出符合策略的密码
+        String pwdError = com.reportsys.common.PasswordPolicy.check(user.getPassword());
+        if (pwdError != null) return Result.error(pwdError);
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setCreateTime(LocalDateTime.now());
         userMapper.insert(user);
         return Result.success("新增成功");

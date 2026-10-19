@@ -105,7 +105,7 @@ public class FileController {
     public ResponseEntity<byte[]> download(@PathVariable Long id) {
         RptFile file = fileStorageService.getById(id);
         byte[] content = fileStorageService.readBytes(id);
-        String fileName = URLEncoder.encode(file.getFileName(), StandardCharsets.UTF_8);
+        String fileName = com.reportsys.common.WebUtils.encodeFileName(file.getFileName());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

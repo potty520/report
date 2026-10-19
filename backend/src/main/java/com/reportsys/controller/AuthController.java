@@ -160,6 +160,10 @@ public class AuthController {
 
     /**
      * 修改密码
+     *
+     * 安全修复(A08)：原来忽略 updatePwd() 的返回值，无论旧密码对错都返回"操作成功"，
+     * 导致「旧密码校验形同虚设」（用户以为改了其实没改），且把失败信息吞掉。
+     * 现在必须把服务层的失败结果原样返回。
      */
     @PutMapping("/password")
     public Result<Void> updatePassword(@RequestParam String oldPassword,
@@ -173,7 +177,11 @@ public class AuthController {
             if (userId == null) {
                 return Result.error("用户未登录");
             }
-            sysUserService.updatePwd(userId, oldPassword, newPassword);
+            Result<?> r = sysUserService.updatePwd(userId, oldPassword, newPassword);
+            // 校验失败（如旧密码错误、新密码过短）必须透传，不能一律 success
+            if (r == null || r.getCode() != 200) {
+                return Result.error(r == null ? "密码修改失败" : r.getMsg());
+            }
             return Result.success();
         } catch (AccessDeniedException e) {
             throw e;

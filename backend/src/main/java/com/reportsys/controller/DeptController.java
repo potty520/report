@@ -46,7 +46,11 @@ public class DeptController {
 
     /**
      * 新增部门
+     *
+     * 安全修复(X04)：组织架构属于平台级配置，仅超管可写。
+     * 原来类级别只有 hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')，导致部门管理员可新建部门（垂直越权）。
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
     public Result<Void> add(@RequestBody SysDept dept) {
         try {
@@ -61,7 +65,10 @@ public class DeptController {
 
     /**
      * 更新部门
+     *
+     * 安全修复：写操作收紧为超管（与 X04 同源问题）。
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping
     public Result<Void> update(@RequestBody SysDept dept) {
         try {
@@ -78,12 +85,15 @@ public class DeptController {
      * 删除部门
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody SysDept dept) {
         dept.setId(id);
         return update(dept);
     }
 
+    /** 安全修复：删除部门属高危操作，收紧为超管。 */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {

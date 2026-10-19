@@ -40,8 +40,11 @@ public class TemplateController {
 
     /**
      * 分页列表
+     *
+     * 路由修复(P13)：旧前端(frontend)调用 /template/list，会被 /template/{id} 捕获，
+     * "list" 解析成 Long 失败返回 500。这里补上 /list 别名，指向同一分页逻辑。
      */
-    @GetMapping("/page")
+    @GetMapping({"/page", "/list"})
     public Result<PageResult<RptTemplate>> listPage(@RequestParam(defaultValue = "1") int page,
                                                      @RequestParam(defaultValue = "10") int pageSize,
                                                      @RequestParam(required = false) String templateName,
@@ -74,8 +77,10 @@ public class TemplateController {
 
     /**
      * 详情(包含字段列表)
+     *
+     * 路由修复(P13 配套)：加 {id:\d+} 约束，防止 /list、/by-code 等字面路径被当成 id。
      */
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public Result<RptTemplate> getById(@PathVariable Long id) {
         try {
             // 模板两级授权：无权访问的模板按"不存在"处理，避免越权读取字段定义
@@ -96,6 +101,7 @@ public class TemplateController {
     /**
      * 新增模板
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
     public Result<Long> add(@RequestBody RptTemplate template) {
         try {
@@ -118,6 +124,7 @@ public class TemplateController {
     /**
      * 更新模板
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping
     public Result<Void> update(@RequestBody RptTemplate template) {
         try {
@@ -135,6 +142,7 @@ public class TemplateController {
     /**
      * 删除模板
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {
@@ -150,6 +158,7 @@ public class TemplateController {
     /**
      * 切换状态(启用/停用)
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}/status")
     public Result<Void> toggleStatus(@PathVariable Long id, @RequestParam Integer status) {
         try {
@@ -196,6 +205,7 @@ public class TemplateController {
     /**
      * 批量保存字段映射
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/{id}/fields")
     public Result<Void> saveFields(@PathVariable Long id, @RequestBody List<RptTemplateField> fields) {
         try {
@@ -215,6 +225,7 @@ public class TemplateController {
     /**
      * 部署(关联数据源+表)
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/{id}/deploy")
     public Result<Void> deploy(@PathVariable Long id,
                                 @RequestParam(required = false) Long datasourceId,
@@ -256,6 +267,7 @@ public class TemplateController {
     /**
      * 解析上传的 Excel 模板表头，返回字段建议（P0-A）
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/parse-excel")
     public Result<Map<String, Object>> parseExcel(@RequestParam("file") MultipartFile file,
                                                    @RequestParam(defaultValue = "0") int headerRowIndex) {
@@ -272,6 +284,7 @@ public class TemplateController {
     /**
      * 物化到目标业务库（建表）；recreate=true 先删后建
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/{id}/materialize")
     @OperLog(module = "模板管理", action = "物化建表")
     public Result<Map<String, Object>> materialize(@PathVariable Long id,
@@ -288,6 +301,7 @@ public class TemplateController {
     /**
      * 删除物化表
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/{id}/materialize")
     @OperLog(module = "模板管理", action = "删除物化表")
     public Result<Void> dropMaterialize(@PathVariable Long id) {
@@ -307,7 +321,7 @@ public class TemplateController {
     @GetMapping("/{id}/download")
     public ResponseEntity<byte[]> download(@PathVariable Long id) {
         byte[] content = rptTemplateService.downloadTemplate(id);
-        String fileName = URLEncoder.encode("template-" + id + ".xlsx", StandardCharsets.UTF_8);
+        String fileName = com.reportsys.common.WebUtils.encodeFileName("template-" + id + ".xlsx");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

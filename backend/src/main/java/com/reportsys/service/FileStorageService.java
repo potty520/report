@@ -72,10 +72,46 @@ public class FileStorageService {
         return root;
     }
 
+    /**
+     * 允许上传的文件后缀白名单。
+     *
+     * 缺陷修复(G07)：原实现只做文件名非法字符清洗，没有后缀限制，
+     * .sh / .exe / .jsp 等可执行或可被解释的文件也能上传成功（评测实测 .sh 被接受=True）。
+     * 改为白名单：不在名单内一律拒绝。白名单比黑名单可靠，黑名单永远漏得掉新后缀。
+     */
+    private static final java.util.Set<String> ALLOWED_EXTENSIONS = new java.util.HashSet<>(java.util.Arrays.asList(
+            // 办公文档
+            "doc", "docx", "xls", "xlsx", "xlsm", "csv", "ppt", "pptx", "pdf", "txt", "rtf", "md",
+            // 图片
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg",
+            // 压缩包
+            "zip", "rar", "7z", "tar", "gz",
+            // 音视频
+            "mp3", "mp4", "wav", "avi", "mov",
+            // 结构化数据
+            "json", "xml", "yaml", "yml"
+    ));
+
+    /** 校验文件后缀是否在白名单内；无后缀或不在名单内一律拒绝 */
+    private void assertExtensionAllowed(String originalFilename) {
+        if (StrUtil.isBlank(originalFilename)) return;
+        String name = originalFilename.trim();
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) {
+            throw new RuntimeException("文件缺少扩展名，拒绝上传");
+        }
+        String ext = name.substring(dot + 1).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.contains(ext)) {
+            throw new RuntimeException("不支持的文件类型: ." + ext + "，仅允许上传文档、图片、压缩包等常规格式");
+        }
+    }
+
     /** 普通上传 */
     @Transactional
     public RptFile save(MultipartFile file, String fileType, Long taskId, Long dataId, Long templateId, Long uploadBy) {
         if (file == null || file.isEmpty()) throw new RuntimeException("上传文件为空");
+        // 缺陷修复(G07)：先做后缀白名单校验，再做大小/落盘
+        assertExtensionAllowed(file.getOriginalFilename());
         long maxBytes = (long) maxSizeMb * 1024 * 1024;
         if (file.getSize() > maxBytes) throw new RuntimeException("文件超过 " + maxSizeMb + "MB 限制");
         try {
@@ -175,6 +211,9 @@ public class FileStorageService {
 
     private RptFile store(byte[] content, String fileName, String contentType, String md5, String fileType,
                           Long taskId, Long dataId, Long templateId, Long uploadBy) throws IOException {
+        // 缺陷修复(G07)：store() 是所有落盘路径的唯一入口（普通上传 + 分片合并都走这里），
+        // 在入口统一做后缀白名单，避免某条路径漏校验。
+        assertExtensionAllowed(fileName);
         // 秒传：同 md5 已存在则直接复用
         RptFile exist = rptFileMapper.selectOne(Wrappers.<RptFile>lambdaQuery()
                 .eq(RptFile::getMd5, md5).eq(RptFile::getDeleted, 0).last("limit 1"));
