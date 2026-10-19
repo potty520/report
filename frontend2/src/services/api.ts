@@ -823,30 +823,94 @@ export async function testDatasourceConnectionApi(data: DatasourceFormParams) {
 }
 
 // --- Task ---
+
+/**
+ * 任务列表归一化。
+ *
+ * 背景（业务流转测试发现）：后端返回的是 rpt_task 实体字段
+ *   { taskName, templateId, belongTime, fillDeadline, auditDeadline, fillingCycle, status }
+ * 而前端 TaskItem 期望
+ *   { name, templateName, year, period, startDate, endDate, status }
+ * 之前只补了 name，导致：
+ *   - 列表「模板/年度/期数/开始日期/结束日期」列全部显示 "-"
+ *   - 操作列按 record.status 判断本身没问题，但编辑弹窗回填日期为空
+ */
+function normalizeTaskRow(x: Record<string, any>): Record<string, any> {
+  const belongTime: string = x.belongTime ?? '';
+  // belongTime 形如 "2026-10"，拆出年度与期数
+  const yearFromBelong = belongTime && /^\d{4}/.test(belongTime)
+    ? Number(belongTime.slice(0, 4))
+    : undefined;
+  const periodFromBelong = belongTime && belongTime.length > 4
+    ? belongTime.slice(5)
+    : undefined;
+  return {
+    ...x,
+    name: x.name ?? x.taskName,
+    taskName: x.taskName ?? x.name,
+    year: x.year ?? yearFromBelong,
+    period: x.period ?? periodFromBelong ?? '',
+    // 后端只有 fillDeadline（填报截止），作为结束日期展示；
+    // 开始日期后端无对应字段，保留接口返回（若未来新增则自动生效）
+    startDate: x.startDate ?? x.startTime ?? '',
+    endDate: x.endDate ?? (x.fillDeadline ? String(x.fillDeadline).slice(0, 10) : ''),
+    templateName: x.templateName ?? (x.templateId != null ? `模板#${x.templateId}` : ''),
+  };
+}
+
 export async function getTaskListApi(params: PageParams) {
   const res = await request.get<ApiResponse<PageResult<TaskItem>>>('/task/page', { params });
-  // 归一化：后端是 taskName，早期页面按 name 读 → 补 name，避免下拉显示 "undefined"
   const page = res.data.data as unknown as Record<string, any>;
   if (page && Array.isArray(page.list)) {
-    page.list = page.list.map((x: Record<string, any>) => ({
-      ...x,
-      name: x.name ?? x.taskName,
-      taskName: x.taskName ?? x.name,
-    }));
+    page.list = page.list.map(normalizeTaskRow);
   }
   return res;
 }
 
 export async function getTaskDetailApi(id: number) {
-  return request.get<ApiResponse<TaskItem>>(`/task/${id}`);
+  const res = await request.get<ApiResponse<TaskItem>>(`/task/${id}`);
+  const data = res.data.data as unknown as Record<string, any>;
+  if (data) res.data.data = normalizeTaskRow(data) as unknown as TaskItem;
+  return res;
+}
+
+/**
+ * 任务提交参数转换：前端表单字段 → 后端实体字段。
+ *
+ * 修复 P0（业务流转测试发现）：前端 TaskFormParams 是
+ *   { name, year, period, startDate, endDate, templateId, description }
+ * 后端 RptTask 需要
+ *   { taskName, templateId, belongTime, fillDeadline, fillingCycle }
+ * 字段名不一致导致 POST /task 返回 500、任务无法创建。
+ * 这里做统一转换，避免把后端字段名泄漏到页面层。
+ */
+export function toTaskPayload(data: TaskFormParams): Record<string, any> {
+  const belongTime =
+    data.year != null
+      ? (data.period ? `${data.year}-${data.period}` : String(data.year))
+      : undefined;
+  // 结束日期 → fillDeadline；LocalDateTime 需要 ISO 形式，补 23:59:59
+  const fillDeadline = data.endDate
+    ? (data.endDate.length === 10 ? `${data.endDate}T23:59:59` : data.endDate)
+    : undefined;
+  const payload: Record<string, any> = {
+    taskName: data.name,
+    templateId: data.templateId,
+    belongTime,
+    fillDeadline,
+    description: data.description,
+  };
+  if (data.id != null) payload.id = data.id;
+  if (data.status != null) payload.status = data.status;
+  return payload;
 }
 
 export async function createTaskApi(data: TaskFormParams) {
-  return request.post<ApiResponse<null>>('/task', data);
+  return request.post<ApiResponse<null>>('/task', toTaskPayload(data));
 }
 
 export async function updateTaskApi(data: TaskFormParams) {
-  return request.put<ApiResponse<null>>('/task', data);
+  return request.put<ApiResponse<null>>('/task', toTaskPayload(data));
 }
 
 export async function deleteTaskApi(id: number) {
