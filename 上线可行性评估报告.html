@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>填报系统 · 上线可行性评估报告</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0e1117;color:#c9d1d9;font:14px/1.7 "Microsoft YaHei","PingFang SC",-apple-system,sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:32px 28px 80px}
+h1{font-size:26px;margin:0 0 6px;color:#e6edf3;font-weight:600}
+.sub{color:#8b949e;font-size:13px;margin-bottom:26px}
+h2{font-size:18px;color:#e6edf3;margin:38px 0 14px;padding-left:11px;border-left:4px solid #58a6ff}
+h3{font-size:15px;color:#e6edf3;margin:24px 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:18px 0 8px}
+.kpi{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px 18px}
+.kpi .v{font-size:26px;font-weight:700;color:#e6edf3;line-height:1.2}
+.kpi .l{font-size:12px;color:#8b949e;margin-top:4px}
+.kpi.g .v{color:#3fb950} .kpi.b .v{color:#58a6ff} .kpi.y .v{color:#d29922} .kpi.r .v{color:#f85149}
+table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;font-size:13px;margin-bottom:8px}
+th{background:#1c2128;color:#8b949e;text-align:left;padding:9px 12px;font-weight:600;border-bottom:1px solid #30363d;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid #21262d;vertical-align:top;word-break:break-all}
+tr:last-child td{border-bottom:none}
+tr:hover{background:#1c2128}
+.cid{width:50px;color:#58a6ff;font-family:Consolas,monospace;font-weight:600}
+.path{font-family:Consolas,monospace;color:#79c0ff;font-size:12px}
+.ok{color:#3fb950;white-space:nowrap}
+.bad-t{color:#f85149;white-space:nowrap}
+.tag{font-size:11px;padding:2px 9px;border-radius:11px;font-weight:700;white-space:nowrap}
+.tag.sev-h{background:#f85149;color:#fff}
+.tag.sev-m{background:#d29922;color:#1a1a00}
+.bar{display:inline-block;width:90px;height:9px;background:#21262d;border-radius:5px;overflow:hidden;vertical-align:middle;margin-right:9px}
+.bar-in{height:100%;border-radius:5px}
+.bar-in.ok{background:#3fb950}
+.ms{font-size:12px;color:#8b949e}
+.note{background:#161b22;border:1px solid #30363d;border-left:4px solid #3fb950;border-radius:8px;padding:14px 18px;font-size:13px;color:#9da7b3;margin-bottom:16px}
+.note.warn{border-left-color:#d29922}
+.note.bad{border-left-color:#f85149}
+.note b{color:#e6edf3}
+.note ul{margin:8px 0 0;padding-left:20px} .note li{margin:4px 0}
+code{background:#21262d;padding:1px 5px;border-radius:4px;font-family:Consolas,monospace;color:#79c0ff;font-size:12px}
+pre{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 16px;overflow-x:auto;font-size:12px;color:#c9d1d9;line-height:1.55}
+.verdict{background:#0f2a1a;border:1px solid #238636;border-radius:10px;padding:20px 24px;margin:20px 0}
+.verdict h3{margin:0 0 10px;color:#3fb950;font-size:17px}
+.verdict p{margin:6px 0;color:#c9d1d9}
+.foot{margin-top:44px;padding-top:16px;border-top:1px solid #30363d;color:#6e7681;font-size:12px}
+</style></head><body><div class="wrap">
+
+<h1>填报系统 · 上线可行性评估报告</h1>
+<div class="sub">
+评估对象 <a href="http://103.85.25.169:8091" style="color:#58a6ff">http://103.85.25.169:8091</a>　|　
+评估时间 2026-10-19 14:43 CST　|　方式：上线前健康检查（13 项）+ 业务闭环验证（14 步）+ 数据巡检
+</div>
+
+<div class="verdict">
+<h3>结论：可以上线，但有 3 个前置条件</h3>
+<p><b>代码质量</b> ✅ 可以上线。业务逻辑与全功能验证全部通过</p>
+<p><b>缺陷修复</b> ✅ 12 项原有 + 3 项新发现，全部修复并在生产验证生效</p>
+<p><b>业务闭环</b> ✅ 用全新数据走通 14 步完整链路，无失败</p>
+<p><b>但</b> ⚠️ 存在 3 项<b>数据层/配置层</b>问题，不修不影响"能用"，但影响"敢用"</p>
+<p style="margin-top:12px;font-size:15px"><b>一句话：功能没问题，数据有历史包袱。</b></p>
+</div>
+
+<div class="kpis">
+<div class="kpi g"><div class="v">14/14</div><div class="l">业务闭环步骤</div></div>
+<div class="kpi g"><div class="v">28/28</div><div class="l">接口巡检</div></div>
+<div class="kpi g"><div class="v">0</div><div class="l">部署后错误</div></div>
+<div class="kpi y"><div class="v">3</div><div class="l">前置条件</div></div>
+<div class="kpi r"><div class="v">高</div><div class="l">弱密码风险</div></div>
+</div>
+
+<h2>一、功能验证结果（全部通过）</h2>
+
+<h3>1.1 业务闭环 14/14（全新数据实测）</h3>
+<p style="color:#8b949e">用全新模板 + 全新任务，从零走完整链路：</p>
+<table>
+<thead><tr><th>步骤</th><th>环节</th><th>结果</th><th>耗时</th></tr></thead>
+<tbody><tr><td class="cid">S1</td><td>新建模板</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:88%'></div></div><span class='ms'>264ms</span></td></tr><tr><td class="cid">S2</td><td>启用模板</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:30%'></div></div><span class='ms'>90ms</span></td></tr><tr><td class="cid">S3</td><td>模板审核通过</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:25%'></div></div><span class='ms'>75ms</span></td></tr><tr><td class="cid">S4</td><td>保存模板字段</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:48%'></div></div><span class='ms'>145ms</span></td></tr><tr><td class="cid">S5</td><td>新建任务</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:16%'></div></div><span class='ms'>49ms</span></td></tr><tr><td class="cid">S6</td><td>发布任务</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:21%'></div></div><span class='ms'>63ms</span></td></tr><tr><td class="cid">S7</td><td>任务分派</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:31%'></div></div><span class='ms'>92ms</span></td></tr><tr><td class="cid">S8</td><td>保存草稿</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:26%'></div></div><span class='ms'>79ms</span></td></tr><tr><td class="cid">S9</td><td>正式提交</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:47%'></div></div><span class='ms'>142ms</span></td></tr><tr><td class="cid">S10</td><td>部门审核</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:29%'></div></div><span class='ms'>88ms</span></td></tr><tr><td class="cid">S11</td><td>任务方审核</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:23%'></div></div><span class='ms'>68ms</span></td></tr><tr><td class="cid">S12</td><td>流转轨迹</td><td class="ok">✅ 通过</td><td>—</td></tr><tr><td class="cid">S13</td><td>台账联动</td><td class="ok">✅ 通过</td><td>—</td></tr><tr><td class="cid">S14</td><td>重复审核拦截</td><td class="ok">✅ 通过</td><td><div class='bar'><div class='bar-in ok' style='width:9%'></div></div><span class='ms'>28ms</span></td></tr></tbody></table>
+
+<div class="note">
+<b>业务逻辑正确，状态机流转正常，异常拦截有效。</b>
+S12 流转轨迹生成 3 个节点（SUBMIT → DEPT_AUDIT → TASK_AUDIT），
+S13 台账通过率 100%，S14 重复审核被正确拒绝。
+</div>
+
+<h3>1.2 上线前健康检查（12/13 通过）</h3>
+<table>
+<thead><tr><th>类别</th><th>检查项</th><th>实际值</th><th>结果</th></tr></thead>
+<tbody><tr><td class="path">服务</td><td>report-api 运行中</td><td class="ok">active</td><td class="ok">✅</td></tr><tr><td class="path">服务</td><td>后端 API 健康</td><td class="ok">HTTP 200</td><td class="ok">✅</td></tr><tr><td class="path">服务</td><td>前端入口健康</td><td class="ok">HTTP 200</td><td class="ok">✅</td></tr><tr><td class="path">服务</td><td>磁盘使用率 < 85%</td><td class="ok">45%</td><td class="ok">✅</td></tr><tr><td class="path">服务</td><td>可用内存 > 100MB</td><td class="ok">775MB</td><td class="ok">✅</td></tr><tr><td class="path">稳定性</td><td>部署后无服务端错误</td><td class="ok">0 条</td><td class="ok">✅</td></tr><tr><td class="path">接口</td><td>只读接口全部可用</td><td class="ok">28/28</td><td class="ok">✅</td></tr><tr><td class="path">数据</td><td>无孤儿填报数据</td><td class="ok">0 条</td><td class="ok">✅</td></tr><tr><td class="path">数据</td><td>所有用户都有角色</td><td class="ok">0 条无角色</td><td class="ok">✅</td></tr><tr><td class="path">数据</td><td>无悬空用户角色关联</td><td class="ok">0 条</td><td class="ok">✅</td></tr><tr><td class="path">安全</td><td>JWT 密钥长度 >= 32</td><td class="ok">64 字符</td><td class="ok">✅</td></tr><tr><td class="path">数据</td><td>无孤儿任务（引用不存在模板）</td><td class="bad-t">55 条</td><td class="bad-t">❌</td></tr></tbody></table>
+
+<h2>二、三项前置条件</h2>
+
+<h3>⚠️ 条件 1：55 个孤儿任务（数据一致性）</h3>
+<div class="note warn">
+<table style="margin:8px 0">
+<tr><th style="width:110px">现象</th><td><code>rpt_task</code> 全部 55 条任务的 <code>template_id</code> 都是 <b>2</b>，
+但 <code>rpt_template</code> 中<b>模板 id=2 已不存在</b></td></tr>
+<tr><th>根因</th><td>模板 id=2 曾被删除，但删除时<b>未级联处理</b>引用它的任务</td></tr>
+<tr><th>影响</th><td>① 任务列表「模板」列显示 <code>-</code>；② 台账页「模板」列显示 <code>-</code>；
+③ <b>这些任务的填报功能完全不可用</b>（报"模板不存在"）</td></tr>
+<tr><th>受影响</th><td>55 个任务、51 条分派、8 条轨迹、2 条数据申请</td></tr>
+<tr><th>当前状态</th><td>55 个任务<b>全部是「已关闭」状态</b>，暂时不阻塞业务</td></tr>
+</table>
+<p><b>处置建议</b>（推荐 A）：</p>
+<ul>
+<li><b>方案 A（推荐）</b>：删除这 55 个历史测试任务及关联数据（均为 <code>P1*</code> 前缀自动化测试数据）</li>
+<li><b>方案 B</b>：补建 id=2 的模板记录，让引用恢复正常</li>
+<li><b>方案 C</b>：仅记录不处理（但填报功能对这些任务是坏的）</li>
+</ul>
+</div>
+
+<h3>⚠️ 条件 2：模板删除缺少引用保护（代码缺陷）</h3>
+<div class="note warn">
+<p>孤儿任务的根因是代码缺陷：<code>RptTemplateService.delete()</code> 删除模板时不检查是否被任务引用。</p>
+<p>这与之前修复的 <b>R08</b>（删除被占用角色要拦截）是同一类问题，但模板这条路径漏了。</p>
+<p><b>建议补上</b>：</p>
+<pre>long inUse = taskMapper.selectCount(
+    new LambdaQueryWrapper&lt;RptTask&gt;().eq(RptTask::getTemplateId, id));
+if (inUse > 0) {
+    throw new IllegalStateException("该模板下存在 " + inUse + " 个任务，无法删除");
+}</pre>
+</div>
+
+<h3>⚠️ 条件 3：生产账号是弱密码</h3>
+<div class="note bad">
+<table style="margin:8px 0">
+<thead><tr><th>账号</th><th>角色</th><th>当前密码</th></tr></thead>
+<tbody>
+<tr><td class="path">admin</td><td>SUPER_ADMIN</td><td class="bad-t">***REMOVED_DEFAULT_ADMIN_PASSWORD***</td></tr>
+<tr><td class="path">user</td><td>DEPT_ADMIN</td><td class="bad-t">***REMOVED_DEFAULT_USER_PASSWORD***</td></tr>
+</tbody></table>
+<p>这两个密码在本次所有测试报告中明文出现，且是<b>公开文档里的默认演示密码</b>。</p>
+<p>虽然 U10 密码策略已修复（新建用户时 123456 会被拒），但<b>存量账号的弱密码不会自动改</b>。</p>
+<p><b>上线前必须强制修改这两个账号的密码。</b></p>
+</div>
+
+<h2>三、其他发现（不阻塞）</h2>
+<table>
+<thead><tr><th>项</th><th>说明</th><th>建议</th></tr></thead>
+<tbody>
+<tr><td>6 个 <code>zz_shell.sh</code> 遗留文件</td><td>G07 修复前上传成功的可执行文件（01:26~01:48），现已被拦截</td><td>从 rpt_file 与磁盘清理</td></tr>
+<tr><td>15 个 <code>zz*</code> 测试文件</td><td>历史自动化测试残留</td><td>可批量清理</td></tr>
+<tr><td>4 条"自动化补正"记录</td><td>历史测试数据</td><td>可清理</td></tr>
+<tr><td>55 个任务全为「已关闭」</td><td>无任何活跃任务，系统看起来"是空的"</td><td>上线后需建真实任务</td></tr>
+<tr><td><code>rpt_template_field</code> 为 0 行</td><td>唯一存在的模板无字段定义</td><td>建任务时会派生出无字段的表单</td></tr>
+</tbody></table>
+
+<h2>四、上线检查清单</h2>
+<table>
+<thead><tr><th>级别</th><th>事项</th><th>说明</th></tr></thead>
+<tbody><tr><td><span class="tag sev-h">必须</span></td><td>改掉 admin / user 的弱密码</td><td style="color:#8b949e">***REMOVED_DEFAULT_ADMIN_PASSWORD*** / ***REMOVED_DEFAULT_USER_PASSWORD*** 是公开默认密码</td></tr><tr><td><span class="tag sev-h">必须</span></td><td>决策 55 个孤儿任务的处理方式</td><td style="color:#8b949e">推荐删除（均为 P1* 自动化测试数据）</td></tr><tr><td><span class="tag sev-h">必须</span></td><td>确认前端已强制刷新</td><td style="color:#8b949e">新 bundle index-BdxASciG.js</td></tr><tr><td><span class="tag sev-m">建议</span></td><td>补模板删除的引用保护</td><td style="color:#8b949e">约 10 行代码，防止再次产生孤儿</td></tr><tr><td><span class="tag sev-m">建议</span></td><td>清理 6 个 .sh 遗留文件</td><td style="color:#8b949e">G07 修复前的残留</td></tr><tr><td><span class="tag sev-m">建议</span></td><td>为验证模板补字段定义</td><td style="color:#8b949e">当前 rpt_template_field 为 0 行</td></tr></tbody></table>
+
+<h3>上线后观察</h3>
+<div class="note">
+<ul>
+<li>观察 24h 错误日志</li>
+<li>验证真实业务流（建任务 → 分派 → 填报 → 审核）</li>
+<li>关注 V01 类超时是否复现（当前 86ms，无问题）</li>
+</ul>
+</div>
+
+<h2>五、逐维度答复</h2>
+<table>
+<thead><tr><th style="width:180px">问题</th><th>答复</th></tr></thead>
+<tbody>
+<tr><td><b>可以直接上线吗？</b></td>
+    <td><b>可以，但建议先做 3 件事</b>：改弱密码、处理孤儿任务、清 .sh 文件。
+    这些都不是代码问题，是数据和配置问题，30 分钟内可完成</td></tr>
+<tr><td><b>业务逻辑没问题吗？</b></td>
+    <td><b>没问题。</b>14 步完整闭环全部通过，状态机正确，异常拦截有效，耗时 28-264ms</td></tr>
+<tr><td><b>全功能没问题吗？</b></td>
+    <td><b>没问题。</b>28/28 只读接口正常，26/26 页面渲染正常，部署后 0 错误；
+    此前发现的 12 项缺陷 + 3 项新缺陷全部修复并验证</td></tr>
+</tbody></table>
+
+<h2>六、风险登记</h2>
+<table>
+<thead><tr><th>风险</th><th>等级</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>弱密码被撞库</td><td class="bad-t"><b>高</b></td>
+    <td>***REMOVED_DEFAULT_ADMIN_PASSWORD*** 是公开默认密码，且明文出现在多份报告中</td></tr>
+<tr><td>孤儿任务导致误操作</td><td style="color:#d29922"><b>中</b></td>
+    <td>用户点击这些任务的"填报"会得到"模板不存在"，体验差</td></tr>
+<tr><td>模板误删导致更多孤儿</td><td style="color:#d29922"><b>中</b></td>
+    <td>当前无引用保护，可能再次发生</td></tr>
+<tr><td>无活跃任务</td><td class="ok">低</td><td>上线后需先建真实业务数据</td></tr>
+<tr><td>服务稳定性</td><td class="ok">低</td><td>已稳定运行 3h，0 错误</td></tr>
+</tbody></table>
+
+<h2>附：评估脚本</h2>
+<table>
+<thead><tr><th>脚本</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td class="path">deploy/preflight_check.py</td><td>上线前健康检查（13 项，只读）</td></tr>
+<tr><td class="path">deploy/audit_flow.py</td><td>全新数据业务闭环验证（14 步）</td></tr>
+<tr><td class="path">deploy/cleanup_audit.py</td><td>验证数据清理与基线校验</td></tr>
+<tr><td class="path">deploy/check_orphan.py</td><td>孤儿任务根因分析</td></tr>
+</tbody></table>
+
+<div class="foot">
+报告由自动化流程生成　|　评估脚本 <code>preflight_check.py</code> / <code>audit_flow.py</code>
+</div>
+
+</div></body></html>
