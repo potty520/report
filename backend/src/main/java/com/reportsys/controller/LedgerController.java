@@ -82,8 +82,8 @@ public class LedgerController {
             exportRows.add(item);
         }
         byte[] content = excelService.export(headers, exportRows);
-        String fileName = URLEncoder.encode("台账-" + reportStatsService.typeLabel(type) + "-"
-                + System.currentTimeMillis() + ".xlsx", StandardCharsets.UTF_8);
+        String fileName = com.reportsys.common.WebUtils.encodeFileName("台账-" + reportStatsService.typeLabel(type) + "-"
+                + System.currentTimeMillis() + ".xlsx");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

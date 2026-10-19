@@ -65,7 +65,7 @@ public class VolumeFileController {
     @GetMapping("/{groupKey}/download")
     public ResponseEntity<byte[]> download(@PathVariable String groupKey) {
         byte[] content = volumeFileService.zipGroup(groupKey);
-        String fileName = URLEncoder.encode("分卷附件-" + groupKey + ".zip", StandardCharsets.UTF_8);
+        String fileName = com.reportsys.common.WebUtils.encodeFileName("分卷附件-" + groupKey + ".zip");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

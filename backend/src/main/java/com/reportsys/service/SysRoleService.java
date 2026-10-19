@@ -18,6 +18,7 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
 
     @Resource private SysRoleMapper roleMapper;
     @Resource private SysMenuService menuService;
+    @Resource private com.reportsys.dao.SysUserRoleMapper userRoleMapper;
 
     public PageResult<SysRole> pageList(int pageNum, int pageSize, String keyword) {
         Page<SysRole> page = new Page<>(pageNum, pageSize);
@@ -46,8 +47,21 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
         }
     }
 
+    /**
+     * 删除角色。
+     *
+     * 缺陷修复(R08)：原来不检查角色是否仍被用户占用，直接物理删除，
+     * 导致 sys_user_role 里留下悬空 role_id（用户"有角色 ID 但角色不存在"），权限判断会出问题。
+     * 现在先统计关联用户数，>0 时拒绝删除并提示，让调用方先解绑。
+     */
     @Transactional
     public void deleteRole(Long id) {
+        long inUse = userRoleMapper.selectCount(
+                new LambdaQueryWrapper<com.reportsys.model.SysUserRole>()
+                        .eq(com.reportsys.model.SysUserRole::getRoleId, id));
+        if (inUse > 0) {
+            throw new IllegalStateException("该角色下存在 " + inUse + " 个用户，无法删除，请先解除关联");
+        }
         roleMapper.deleteById(id);
         menuService.removeMenusByRoleId(id);
     }

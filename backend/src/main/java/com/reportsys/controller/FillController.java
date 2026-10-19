@@ -33,8 +33,12 @@ public class FillController {
 
     /**
      * 我的填报任务列表(分页)
+     *
+     * 路由修复(F02)：前端(frontend2)实际调用 /fill/task/page，
+     * 但后端只有 /fill/task/{taskId}，导致 "page" 被当成 taskId 解析成 Long 失败并返回 500。
+     * 这里显式注册精确路径 /task/page，让 Spring 优先匹配字面路径而不是通配路径。
      */
-    @GetMapping({"/myTasks", "/page"})
+    @GetMapping({"/myTasks", "/page", "/task/page"})
     public Result<PageResult<RptTaskData>> myTasks(@RequestParam(defaultValue = "1") int page,
                                                      @RequestParam(defaultValue = "10") int pageSize,
                                                      @RequestParam(required = false) Integer status) {
@@ -52,8 +56,10 @@ public class FillController {
 
     /**
      * 填报详情(通过taskId)
+     *
+     * 路由修复(F02 配套)：加 {taskId:\d+} 正则约束，避免再被 /task/page 之类的字面路径误捕获。
      */
-    @GetMapping("/task/{taskId}")
+    @GetMapping("/task/{taskId:\\d+}")
     public Result<RptTaskData> getFillDetail(@PathVariable Long taskId) {
         try {
             Long userId = getCurrentUserId();
@@ -226,7 +232,7 @@ public class FillController {
     public ResponseEntity<byte[]> export(@RequestParam Long taskId) {
         Map<String, Object> result = rptTaskDataService.exportTaskData(taskId);
         byte[] content = (byte[]) result.get("content");
-        String fileName = URLEncoder.encode(String.valueOf(result.get("fileName")), StandardCharsets.UTF_8);
+        String fileName = com.reportsys.common.WebUtils.encodeFileName(String.valueOf(result.get("fileName")));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + fileName)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

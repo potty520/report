@@ -3,6 +3,11 @@ backend/target/
 *.jar
 *.war
 
+# 本地 H2 运行库（本地调试产物，不应入库）
+backend/data/
+*.mv.db
+*.trace.db
+
 # Node
 frontend/node_modules/
 frontend/dist/

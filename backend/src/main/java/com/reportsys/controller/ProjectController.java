@@ -48,6 +48,7 @@ public class ProjectController {
     /**
      * 新增项目
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
     public Result<Void> add(@RequestBody SysProject project) {
         try {
@@ -63,6 +64,7 @@ public class ProjectController {
     /**
      * 更新项目
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping
     public Result<Void> update(@RequestBody SysProject project) {
         try {
@@ -79,12 +81,14 @@ public class ProjectController {
      * 删除项目
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody SysProject project) {
         project.setId(id);
         return update(project);
     }
 
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {

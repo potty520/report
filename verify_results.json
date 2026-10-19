@@ -1,0 +1,122 @@
+[
+  {
+    "code": "X04",
+    "name": "普通账号新建部门",
+    "expected": "403",
+    "actual": "HTTP 403 {\"code\":403,\"msg\":\"不允许访问\"}",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "X08",
+    "name": "普通账号创建任务",
+    "expected": "403",
+    "actual": "HTTP 403 {\"code\":403,\"msg\":\"不允许访问\"}",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "X13",
+    "name": "普通账号新建模板",
+    "expected": "403",
+    "actual": "HTTP 403 {\"code\":403,\"msg\":\"不允许访问\"}",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "X14",
+    "name": "普通账号新建项目",
+    "expected": "403",
+    "actual": "HTTP 403 {\"code\":403,\"msg\":\"不允许访问\"}",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "A08",
+    "name": "改密-旧密码错误",
+    "expected": "被拒绝(code!=200)",
+    "actual": "code=500 msg=原密码错误",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "P13",
+    "name": "GET /template/list",
+    "expected": "code=200 正常返回列表",
+    "actual": "HTTP 200 code=200 msg=操作成功",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "F02",
+    "name": "GET /fill/task/page",
+    "expected": "code=200 正常返回列表",
+    "actual": "HTTP 200 code=200 msg=操作成功",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "U05",
+    "name": "重复用户名注册",
+    "expected": "被拒绝且提示已存在",
+    "actual": "code=500 msg=用户名已存在",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "U06",
+    "name": "缺用户名字段注册",
+    "expected": "被友好拒绝且不泄露 SQL",
+    "actual": "code=500 msg=用户名不能为空",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "U10",
+    "name": "弱密码 123456 注册",
+    "expected": "被密码策略拒绝",
+    "actual": "code=500 msg=密码长度不能少于8位",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "U10b",
+    "name": "强密码 Strong@2026x 注册",
+    "expected": "应成功(code=200)",
+    "actual": "code=200 msg=操作成功",
+    "ok": true,
+    "detail": "验证密码策略没有误杀合法密码"
+  },
+  {
+    "code": "R08",
+    "name": "删除被占用角色(閮ㄩ棬绠＄悊鍛�)",
+    "expected": "拒绝删除并提示",
+    "actual": "code=500 msg=该角色下存在 1 个用户，无法删除，请先解除关联",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "G07",
+    "name": "上传 .sh 脚本",
+    "expected": "被拒绝",
+    "actual": "HTTP 200 {\"code\":500,\"msg\":\"不支持的文件类型: .sh，仅允许上传文档、图片、压缩包等常规格式\"}",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "code": "G07b",
+    "name": "上传 .txt 正常文件",
+    "expected": "应成功",
+    "actual": "HTTP 200 {\"code\":200,\"msg\":\"操作成功\",\"data\":{\"id\":1,\"fileName\":\"ok.txt\",\"storePath\":\"20261019/e1f60e81de8749fead336fb1d3698055_ok.tx",
+    "ok": true,
+    "detail": "验证白名单没误杀正常文件"
+  },
+  {
+    "code": "V01",
+    "name": "审核相关查询耗时",
+    "expected": "< 5s",
+    "actual": "27ms (HTTP 404)",
+    "ok": true,
+    "detail": "仅验证查询延迟，完整审核链路需有真实填报数据"
+  }
+]

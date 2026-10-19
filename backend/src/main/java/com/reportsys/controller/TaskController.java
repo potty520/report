@@ -47,6 +47,7 @@ public class TaskController {
     /**
      * 制定任务
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
     public Result<Void> create(@RequestBody RptTask task) {
         try {
@@ -66,6 +67,7 @@ public class TaskController {
     /**
      * 更新任务
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping
     public Result<Void> update(@RequestBody RptTask task) {
         try {
@@ -90,12 +92,14 @@ public class TaskController {
      * 删除任务
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody RptTask task) {
         task.setId(id);
         return update(task);
     }
 
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {
@@ -111,6 +115,7 @@ public class TaskController {
     /**
      * 发布任务
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}/publish")
     public Result<Void> publish(@PathVariable Long id) {
         try {
@@ -126,6 +131,7 @@ public class TaskController {
     /**
      * 关闭任务
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}/close")
     public Result<Void> close(@PathVariable Long id) {
         try {
@@ -141,6 +147,7 @@ public class TaskController {
     /**
      * 分派任务
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/{id}/assign")
     public Result<Void> assign(@PathVariable Long id,
                                 @RequestParam(required = false) List<Long> deptIds,
@@ -199,8 +206,8 @@ public class TaskController {
     /**
      * 手动触发生成当前属期的部门子任务（P0-C；定时任务默认每天 00:05 自动执行）
      */
-    @PostMapping("/generate-periodic")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PostMapping("/generate-periodic")
     @OperLog(module = "任务管理", action = "生成周期任务")
     public Result<Map<String, Object>> generatePeriodic(@RequestParam(required = false) Long parentTaskId) {
         try {

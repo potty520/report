@@ -46,7 +46,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RuntimeException.class)
     public Result<?> handleRuntimeException(RuntimeException e) {
         log.error("运行时异常: ", e);
-        return Result.error(e.getMessage());
+        // 缺陷修复(U06)：底层异常原文（SQL/驱动/堆栈片段）不回显给调用方
+        return Result.error(Result.sanitizeMessage(e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
