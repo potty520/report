@@ -2,6 +2,7 @@ package com.reportsys.aop;
 
 import cn.hutool.core.util.StrUtil;
 import com.reportsys.annotation.OperLog;
+import com.reportsys.common.Result;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -42,7 +43,14 @@ public class OperLogAspect {
         String target = describe(joinPoint);
         try {
             Object result = joinPoint.proceed();
-            record(userId, username, operLog, target, ip, System.currentTimeMillis() - start, 1, null);
+            // 业务方法通常会把异常转成 Result.error(...) 正常返回；此时不能只按“无异常”记成功。
+            if (result instanceof Result && ((Result<?>) result).getCode() != 200) {
+                Result<?> businessResult = (Result<?>) result;
+                record(userId, username, operLog, target, ip, System.currentTimeMillis() - start, 0,
+                        businessResult.getMsg());
+            } else {
+                record(userId, username, operLog, target, ip, System.currentTimeMillis() - start, 1, null);
+            }
             return result;
         } catch (Throwable throwable) {
             record(userId, username, operLog, target, ip, System.currentTimeMillis() - start, 0,

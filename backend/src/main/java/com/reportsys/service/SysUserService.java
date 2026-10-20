@@ -39,6 +39,7 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     @Resource private RptTaskDataMapper rptTaskDataMapper;
     @Resource private RptTaskAssignMapper rptTaskAssignMapper;
     @Resource private RptDataApplyMapper rptDataApplyMapper;
+    @Resource private SysDeptMapper sysDeptMapper;
 
     public Result<Map<String, Object>> login(String username, String password, String uuid, String captcha, HttpServletRequest request) {
         // 真实校验验证码：由 CaptchaStore 统一存取（原实现分两套存储且未命中即放行）
@@ -199,6 +200,7 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         if (user.getRealName() != null) exist.setRealName(user.getRealName());
         if (user.getDeptId() != null) exist.setDeptId(user.getDeptId());
         if (user.getStatus() != null) exist.setStatus(user.getStatus());
+        if (user.getUserType() != null) exist.setUserType(user.getUserType());
         if (user.getEmail() != null) exist.setEmail(user.getEmail());
         if (user.getPhone() != null) exist.setPhone(user.getPhone());
         userMapper.updateById(exist);
@@ -245,16 +247,38 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         userMapper.deleteById(id);
     }
     public void updateStatus(Long id, Integer status) { SysUser u = userMapper.selectById(id); if (u != null) { u.setStatus(status); userMapper.updateById(u); } }
-    public PageResult<SysUser> listPage(int pageNum, int pageSize, String username, Long deptId, Integer status) {
+    public PageResult<SysUser> listPage(int pageNum, int pageSize, String username, String realName,
+                                        Long deptId, Integer status) {
         Page<SysUser> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
         if (username != null && !username.isEmpty()) wrapper.like(SysUser::getUsername, username);
+        if (realName != null && !realName.isEmpty()) wrapper.like(SysUser::getRealName, realName);
         if (deptId != null) wrapper.eq(SysUser::getDeptId, deptId);
         if (status != null) wrapper.eq(SysUser::getStatus, status);
         wrapper.orderByDesc(SysUser::getCreateTime);
         PageResult<SysUser> result = PageResult.of(userMapper.selectPage(page, wrapper));
-        // 安全加固：用户列表不回传密码哈希
-        result.getList().forEach(u -> u.setPassword(null));
+        result.getList().forEach(this::enrichUser);
         return result;
+    }
+
+    private void enrichUser(SysUser user) {
+        // 安全加固：用户列表/详情不回传密码哈希
+        user.setPassword(null);
+        if (user.getDeptId() != null) {
+            SysDept dept = sysDeptMapper.selectById(user.getDeptId());
+            if (dept != null) user.setDeptName(dept.getDeptName());
+        }
+        List<SysUserRole> links = sysUserRoleMapper.selectList(
+                new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, user.getId()));
+        List<Long> roleIds = links.stream().map(SysUserRole::getRoleId).filter(Objects::nonNull)
+                .distinct().collect(Collectors.toList());
+        user.setRoleIds(roleIds);
+        if (!roleIds.isEmpty()) {
+            List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+            user.setRoleNames(roles.stream().map(SysRole::getRoleName).filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+        } else {
+            user.setRoleNames(Collections.emptyList());
+        }
     }
 }

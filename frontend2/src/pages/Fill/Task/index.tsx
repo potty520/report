@@ -52,6 +52,7 @@ const FillTaskPage: React.FC = () => {
   const [fillModalOpen, setFillModalOpen] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
   const [currentStatus, setCurrentStatus] = useState<number>(0);
+  const [currentReadOnly, setCurrentReadOnly] = useState(false);
   const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
   const [fieldsLoading, setFieldsLoading] = useState(false);
   // 填报人角色没有 /template/{id}/fields 权限（403），退化为「字段名-值」手工录入
@@ -63,7 +64,11 @@ const FillTaskPage: React.FC = () => {
   const [fillForm] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
 
-  const readOnly = currentStatus === 1;
+  const isReadOnly = (record: FillTaskItem) =>
+    record.status === 1
+    || record.auditStatus === 1
+    || (record.deptAuditStatus === 1 && record.taskAuditStatus === 1);
+  const readOnly = currentReadOnly;
 
   const doFetch = useCallback(() => {
     fetchTaskList({ current: 1, size: 10 });
@@ -85,6 +90,7 @@ const FillTaskPage: React.FC = () => {
     }
     setCurrentTaskId(record.taskId);
     setCurrentStatus(record.status ?? 0);
+    setCurrentReadOnly(isReadOnly(record));
     setFileUrl(record.fileUrl);
     setFileName(record.fileName || '');
     setTemplateFields([]);
@@ -96,8 +102,10 @@ const FillTaskPage: React.FC = () => {
     try {
       // 详情接口：GET /fill/task/{taskId}
       const detail = await fetchFillDetail(record.taskId);
-      setCurrentStatus(detail?.status ?? record.status ?? 0);
-      setFileUrl(detail?.fileUrl ?? record.fileUrl);
+      const merged = { ...record, ...detail };
+      setCurrentStatus(merged.status ?? record.status ?? 0);
+      setCurrentReadOnly(isReadOnly(merged));
+      setFileUrl(merged.fileUrl ?? record.fileUrl);
       setFileName(detail?.fileName || record.fileName || '');
       const initial = firstFillRecord(detail?.dataJson ?? record.dataJson);
       const templateId = detail?.templateId ?? record.templateId;
@@ -203,13 +211,22 @@ const FillTaskPage: React.FC = () => {
     1: { color: 'green', text: '已提交' },
   };
 
+  const statusMeta = (record: FillTaskItem) => {
+    if (record.auditStatus === 1) return { color: 'green', text: '已通过' };
+    if (record.auditStatus === 2) return { color: 'red', text: '已驳回' };
+    return statusMap[record.status] || { color: 'default', text: '-' };
+  };
+
   const columns: ColumnsType<FillTaskItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
     { title: '任务名称', dataIndex: 'taskName', width: 200, render: (v: string) => v || '-' },
     { title: '模板', dataIndex: 'templateName', width: 150, render: (v: string) => v || '-' },
     {
       title: '状态', dataIndex: 'status', width: 90, align: 'center',
-      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || '-'}</Tag>,
+      render: (_: number, record: FillTaskItem) => {
+        const meta = statusMeta(record);
+        return <Tag color={meta.color}>{meta.text}</Tag>;
+      },
     },
     {
       title: '填报时间', dataIndex: 'createTime', width: 170,
@@ -223,7 +240,7 @@ const FillTaskPage: React.FC = () => {
       title: '操作', key: 'action', width: 140, fixed: 'right',
       render: (_: any, record: FillTaskItem) => (
         <Space>
-          {record.status === 1 ? (
+          {isReadOnly(record) ? (
             <Button size="small" icon={<EditOutlined />} onClick={() => handleFill(record)}>
               查看
             </Button>

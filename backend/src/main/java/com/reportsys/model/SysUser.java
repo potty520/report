@@ -27,4 +27,7 @@ public class SysUser {
     private String deptName;
     @TableField(exist = false)
     private List<Long> roleIds;
+
+    @TableField(exist = false)
+    private List<String> roleNames;
 }

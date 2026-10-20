@@ -1,6 +1,7 @@
 package com.reportsys.controller;
 
 import com.reportsys.common.PageResult;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.common.Result;
 import com.reportsys.model.RptDatasource;
 import com.reportsys.service.RptDatasourceService;
@@ -52,6 +53,7 @@ public class DatasourceController {
      * 新增
      */
     @PostMapping
+    @OperLog(module = "数据源管理", action = "新增数据源")
     public Result<Void> add(@RequestBody RptDatasource datasource) {
         try {
             rptDatasourceService.add(datasource);
@@ -67,6 +69,7 @@ public class DatasourceController {
      * 更新
      */
     @PutMapping
+    @OperLog(module = "数据源管理", action = "修改数据源")
     public Result<Void> update(@RequestBody RptDatasource datasource) {
         try {
             rptDatasourceService.update(datasource);
@@ -83,12 +86,14 @@ public class DatasourceController {
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
     @PutMapping("/{id}")
+    @OperLog(module = "数据源管理", action = "修改数据源")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody RptDatasource datasource) {
         datasource.setId(id);
         return update(datasource);
     }
 
     @DeleteMapping("/{id}")
+    @OperLog(module = "数据源管理", action = "删除数据源")
     public Result<Void> delete(@PathVariable Long id) {
         try {
             rptDatasourceService.deleteById(id);
@@ -104,6 +109,7 @@ public class DatasourceController {
      * 测试连接
      */
     @PostMapping("/test")
+    @OperLog(module = "数据源管理", action = "测试连接")
     public Result<Boolean> testConnection(@RequestParam String ip,
                                            @RequestParam String port,
                                            @RequestParam String dbName,

@@ -1,16 +1,23 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Button, Space, Tag, Modal, Form, Input, message, Popconfirm, App,
+  Table, Button, Space, Tag, Modal, Form, Input, Select, Popconfirm, App,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useDataApplyStore } from '@/stores/useDataApplyStore';
-import type { DataApplyItem, DataApplyFormParams } from '@/services/api';
+import { getTaskListApi } from '@/services/api';
+import type { DataApplyItem, DataApplyFormParams, TaskItem } from '@/services/api';
 import dayjs from 'dayjs';
+
+const statusMap: Record<number, { color: string; text: string }> = {
+  0: { color: 'processing', text: '待审批' },
+  1: { color: 'green', text: '已通过' },
+  2: { color: 'red', text: '已拒绝' },
+};
 
 const DataApplyPage: React.FC = () => {
   const { message: msg } = App.useApp();
-  const { applyList, applyTotal, applyLoading, fetchApplyList, createApply, updateApply, removeApply, setCurrentApply } = useDataApplyStore();
+  const { applyList, applyTotal, applyLoading, fetchApplyList, createApply, updateApply, removeApply } = useDataApplyStore();
 
   const [searchForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -18,6 +25,7 @@ const DataApplyPage: React.FC = () => {
   const [modalTitle, setModalTitle] = useState('新增申请');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useState<Record<string, any>>({});
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
 
   const doFetch = useCallback((params: Record<string, any> = {}) => {
     fetchApplyList({ current: 1, size: 10, ...params });
@@ -25,6 +33,9 @@ const DataApplyPage: React.FC = () => {
 
   useEffect(() => {
     doFetch();
+    getTaskListApi({ current: 1, size: 1000 })
+      .then((res) => setTasks(res.data.data.list || []))
+      .catch(() => setTasks([]));
   }, [doFetch]);
 
   const handleSearch = () => {
@@ -43,17 +54,14 @@ const DataApplyPage: React.FC = () => {
     setEditingId(null);
     setModalTitle('新增申请');
     editForm.resetFields();
+    editForm.setFieldsValue({ taskId: tasks[0]?.id });
     setModalOpen(true);
   };
 
   const handleEdit = (record: DataApplyItem) => {
     setEditingId(record.id);
     setModalTitle('编辑申请');
-    editForm.setFieldsValue({
-      title: record.title,
-      reason: record.reason,
-      dataScope: record.dataScope,
-    });
+    editForm.setFieldsValue({ taskId: record.taskId, reason: record.reason });
     setModalOpen(true);
   };
 
@@ -62,15 +70,15 @@ const DataApplyPage: React.FC = () => {
       await removeApply(id);
       msg.success('删除成功');
       doFetch(searchParams);
-    } catch {
-      msg.error('删除失败');
+    } catch (error: any) {
+      msg.error(error?.response?.data?.msg || error?.message || '删除失败');
     }
   };
 
   const handleModalOk = async () => {
     try {
       const values = await editForm.validateFields();
-      const data: DataApplyFormParams = { ...values };
+      const data: DataApplyFormParams = { taskId: values.taskId, reason: values.reason };
       if (editingId) {
         await updateApply(editingId, data);
         msg.success('更新成功');
@@ -82,45 +90,33 @@ const DataApplyPage: React.FC = () => {
       doFetch(searchParams);
     } catch (error: any) {
       if (error.errorFields) return;
-      msg.error(error?.message || '操作失败');
+      msg.error(error?.response?.data?.msg || error?.message || '操作失败');
     }
-  };
-
-  const statusMap: Record<number, { color: string; text: string }> = {
-    0: { color: 'processing', text: '待审批' },
-    1: { color: 'green', text: '已通过' },
-    2: { color: 'red', text: '已拒绝' },
   };
 
   const columns: ColumnsType<DataApplyItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
-    { title: '申请标题', dataIndex: 'title', width: 200 },
-    { title: '申请原因', dataIndex: 'reason', width: 200, ellipsis: true },
-    { title: '数据范围', dataIndex: 'dataScope', width: 150, render: (v: string) => v || '-' },
-    { title: '申请人', dataIndex: 'applicantName', width: 120 },
+    { title: '申请任务', dataIndex: 'taskName', width: 240, render: (v: string, r) => v || `任务#${r.taskId}` },
+    { title: '申请原因', dataIndex: 'reason', width: 260, ellipsis: true },
+    { title: '申请人', dataIndex: 'applicantName', width: 120, render: (v) => v || '-' },
     {
-      title: '状态', dataIndex: 'status', width: 80, align: 'center',
-      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text}</Tag>,
+      title: '状态', dataIndex: 'status', width: 90, align: 'center',
+      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || '-'}</Tag>,
     },
     {
-      title: '申请时间', dataIndex: 'applyTime', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      title: '申请时间', dataIndex: 'createTime', width: 170,
+      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
-    { title: '审批人', dataIndex: 'approverName', width: 120, render: (v: string) => v || '-' },
+    { title: '审批人', dataIndex: 'auditorName', width: 120, render: (v) => v || '-' },
     {
-      title: '审批时间', dataIndex: 'approveTime', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      title: '审批时间', dataIndex: 'auditTime', width: 170,
+      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: '操作', key: 'action', width: 150, fixed: 'right',
       render: (_: any, record: DataApplyItem) => (
         <Space>
-          {record.status === 0 && (
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-          )}
-          {record.status !== 0 && (
-            <Button type="link" size="small" icon={<EditOutlined />} disabled>编辑</Button>
-          )}
+          <Button type="link" size="small" icon={<EditOutlined />} disabled={record.status !== 0} onClick={() => handleEdit(record)}>编辑</Button>
           <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={record.status !== 0}>删除</Button>
           </Popconfirm>
@@ -129,15 +125,18 @@ const DataApplyPage: React.FC = () => {
     },
   ];
 
+  const taskOptions = tasks.map((task) => ({ value: task.id, label: task.taskName || task.name || `任务#${task.id}` }));
+
   return (
     <div style={{ padding: 24, background: '#fff', borderRadius: 8 }}>
       <div className="search-form" style={{ marginBottom: 16 }}>
         <Form form={searchForm} layout="inline">
-          <Form.Item name="title" label="标题">
-            <Input placeholder="请输入" allowClear />
-          </Form.Item>
           <Form.Item name="status" label="状态">
-            <Input placeholder="0-待审批 1-通过 2-拒绝" allowClear />
+            <Select placeholder="全部状态" allowClear style={{ width: 140 }}>
+              <Select.Option value={0}>待审批</Select.Option>
+              <Select.Option value={1}>已通过</Select.Option>
+              <Select.Option value={2}>已拒绝</Select.Option>
+            </Select>
           </Form.Item>
           <Form.Item>
             <Space>
@@ -157,30 +156,16 @@ const DataApplyPage: React.FC = () => {
         loading={applyLoading}
         scroll={{ x: 1300 }}
         onChange={(pagination) => doFetch({ current: pagination.current, size: pagination.pageSize, ...searchParams })}
-        pagination={{
-          total: applyTotal,
-          showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
-        }}
+        pagination={{ total: applyTotal, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
       />
 
-      <Modal
-        title={modalTitle}
-        open={modalOpen}
-        onOk={handleModalOk}
-        onCancel={() => setModalOpen(false)}
-        destroyOnClose
-        width={550}
-      >
+      <Modal title={modalTitle} open={modalOpen} onOk={handleModalOk} onCancel={() => setModalOpen(false)} destroyOnClose width={560}>
         <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="title" label="申请标题" rules={[{ required: true, message: '请输入申请标题' }]}>
-            <Input placeholder="请输入申请标题" />
+          <Form.Item name="taskId" label="申请任务" rules={[{ required: true, message: '请选择申请任务' }]}>
+            <Select placeholder="请选择需要申请数据的任务" showSearch optionFilterProp="label" options={taskOptions} />
           </Form.Item>
           <Form.Item name="reason" label="申请原因" rules={[{ required: true, message: '请输入申请原因' }]}>
-            <Input.TextArea rows={4} placeholder="请描述申请原因" />
-          </Form.Item>
-          <Form.Item name="dataScope" label="数据范围" rules={[{ required: true, message: '请描述数据范围' }]}>
-            <Input.TextArea rows={3} placeholder="请描述所需数据的范围，如：2024年Q1全区GDP数据" />
+            <Input.TextArea rows={5} placeholder="请描述申请原因、使用目的和预期范围" />
           </Form.Item>
         </Form>
       </Modal>
