@@ -947,7 +947,7 @@ export async function deleteDatasourceApi(id: number) {
 
 export async function testDatasourceConnectionApi(data: DatasourceFormParams) {
   const d = data as unknown as Record<string, any>;
-  return request.post<ApiResponse<TestConnectionResult>>('/datasource/test', {}, {
+  const res = await request.post<ApiResponse<boolean | TestConnectionResult>>('/datasource/test', {}, {
     params: {
       ip: d.ip ?? d.host,
       port: d.port,
@@ -957,6 +957,11 @@ export async function testDatasourceConnectionApi(data: DatasourceFormParams) {
       dsType: d.dsType ?? d.type,
     },
   });
+  // 后端当前返回 boolean；页面组件期望 { success, message }。
+  if (typeof res.data.data === 'boolean') {
+    res.data.data = { success: res.data.data, message: res.data.msg };
+  }
+  return res as unknown as { data: ApiResponse<TestConnectionResult> };
 }
 
 // --- Task ---
