@@ -69,10 +69,12 @@ public class RptTaskDataService {
         }
         authz.assertCanFill(taskData.getTaskId(), taskData.getFillUserId());
 
-        // 检查任务状态
+        // 检查任务状态（注意：status 可能为 null，先判空避免自动拆箱 NPE）
         RptTask task = rptTaskMapper.selectById(taskData.getTaskId());
         if (task == null) throw new RuntimeException("任务不存在");
-        if (task.getStatus() != 2) throw new RuntimeException("任务非填报中状态，无法填报");
+        if (task.getStatus() == null || task.getStatus() != 2) {
+            throw new RuntimeException("任务非填报中状态，无法填报");
+        }
 
         // 检查是否超过截止时间
         if (task.getFillDeadline() != null && LocalDateTime.now().isAfter(task.getFillDeadline())) {
@@ -86,6 +88,16 @@ public class RptTaskDataService {
                         .eq(RptTaskData::getFillUserId, taskData.getFillUserId()));
 
         if (existData != null) {
+            // 终态守卫（审计：高）：已审核通过的数据不允许被"保存草稿"打回
+            // 原实现无条件 setStatus(0)，会把已通过数据变回草稿，而 auditStatus 仍为 1，
+            // 形成「草稿 + 已通过」矛盾状态，台账通过数虚高。
+            if (existData.getAuditStatus() != null && existData.getAuditStatus() == 1) {
+                throw new RuntimeException("该数据已审核通过，不能再修改；如需修改请由管理员发起补正");
+            }
+            if (existData.getDeptAuditStatus() != null && existData.getDeptAuditStatus() == 1
+                    && existData.getTaskAuditStatus() != null && existData.getTaskAuditStatus() == 1) {
+                throw new RuntimeException("该数据已完成双级审核，不能再修改");
+            }
             // 更新已有数据
             existData.setDataJson(taskData.getDataJson());
             existData.setFileUrl(taskData.getFileUrl());
@@ -302,6 +314,18 @@ public class RptTaskDataService {
         if (dataId != null) {
             RptTaskData one = rptTaskDataMapper.selectById(dataId);
             if (one == null) throw new RuntimeException("填报数据不存在");
+            // 安全修复（审计 H3）：原实现传入 dataId 时完全不校验归属，
+            // 可把他人的数据写进目标库并回写入库状态。
+            if (!authz.hasAnyRole(AuthzService.ADMIN)) {
+                Long me = authz.requireUserId();
+                if (one.getFillUserId() == null || !one.getFillUserId().equals(me)) {
+                    throw new AccessDeniedException("无权入库他人的填报数据");
+                }
+            }
+            // 且该数据必须属于当前任务，避免跨任务写入
+            if (one.getTaskId() == null || !one.getTaskId().equals(taskId)) {
+                throw new RuntimeException("该填报数据不属于当前任务");
+            }
             dataList = java.util.Collections.singletonList(one);
         } else if (operatorId != null && !authz.hasAnyRole(AuthzService.ADMIN)) {
             // 普通用户：只入库自己的填报数据（含草稿）
@@ -363,12 +387,36 @@ public class RptTaskDataService {
 
     /**
      * Excel 导入：解析 → 表头校验 → 按字段映射转换 → 分批写回目标库 → 记录为已提交数据
+     *
+     * 安全修复（审计：高）：原实现<b>完全绕开状态机与授权</b>——
+     * 不校验用户是否被分派到该任务、不校验任务是否处于填报中、不校验截止时间，
+     * 还能覆盖已审核通过的数据。任何 FILL_USER 可给任意任务导入并直接标记为"已提交"。
+     * 现在补齐：分派归属、任务状态、填报截止、已审核数据保护。
      */
     @Transactional
     public Map<String, Object> importExcel(Long taskId, Long userId, byte[] content, int headerRowIndex) {
         if (content == null || content.length == 0) throw new RuntimeException("上传文件为空");
+        if (taskId == null) throw new RuntimeException("任务ID不能为空");
+        // ① 分派归属校验（内部会放行超管）
+        authz.assertCanFill(taskId, userId);
         RptTask task = rptTaskMapper.selectById(taskId);
         if (task == null) throw new RuntimeException("任务不存在");
+        // ② 任务必须处于填报中
+        if (task.getStatus() == null || task.getStatus() != 2) {
+            throw new RuntimeException("任务非填报中状态，无法导入");
+        }
+        // ③ 不得晚于填报截止时间
+        if (task.getFillDeadline() != null && LocalDateTime.now().isAfter(task.getFillDeadline())) {
+            throw new RuntimeException("已超过填报截止时间，无法导入");
+        }
+        // ④ 已审核通过的数据不允许被导入覆盖
+        RptTaskData exist = rptTaskDataMapper.selectOne(
+                Wrappers.<RptTaskData>lambdaQuery()
+                        .eq(RptTaskData::getTaskId, taskId)
+                        .eq(RptTaskData::getFillUserId, userId));
+        if (exist != null && exist.getAuditStatus() != null && exist.getAuditStatus() == 1) {
+            throw new RuntimeException("该数据已审核通过，不能用导入覆盖；如需修改请由管理员发起补正");
+        }
         if (task.getTemplateId() == null) throw new RuntimeException("任务未关联模板");
         RptTemplate template = rptTemplateMapper.selectById(task.getTemplateId());
         if (template == null) throw new RuntimeException("模板不存在");

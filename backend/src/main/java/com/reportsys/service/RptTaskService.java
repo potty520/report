@@ -33,6 +33,10 @@ public class RptTaskService {
     private SysProjectMapper sysProjectMapper;
     @Autowired
     private SysUserMapper sysUserMapper;
+    @Autowired
+    private com.reportsys.dao.RptFileMapper rptFileMapper;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     /**
      * 创建任务
@@ -77,6 +81,12 @@ public class RptTaskService {
     public void assignTask(Long taskId, List<Long> fillUserIds, List<Long> auditUserIds) {
         RptTask task = rptTaskMapper.selectById(taskId);
         if (task == null) throw new RuntimeException("任务不存在");
+
+        // 状态守卫（审计 P1-1）：已完成(3)/已关闭(4) 的任务不允许再分派，避免"复活"已关闭任务
+        if (task.getStatus() != null && (task.getStatus() == 3 || task.getStatus() == 4)) {
+            throw new RuntimeException("已完成或已关闭的任务不能再分派");
+        }
+
         boolean hasFill = fillUserIds != null && !fillUserIds.isEmpty();
         boolean hasAudit = auditUserIds != null && !auditUserIds.isEmpty();
         if (!hasFill && !hasAudit) {
@@ -84,45 +94,36 @@ public class RptTaskService {
             throw new RuntimeException("请至少选择一个分派对象（userIds/deptIds 不能都为空）");
         }
 
-        // 删除原有分派
-        rptTaskAssignMapper.delete(
-                Wrappers.<RptTaskAssign>lambdaQuery().eq(RptTaskAssign::getTaskId, taskId));
-
-        // 分派填报人员
-        if (fillUserIds != null) {
-            for (Long userId : fillUserIds) {
-                SysUser user = sysUserMapper.selectById(userId);
-                if (user == null) continue;
-                RptTaskAssign assign = new RptTaskAssign();
-                assign.setTaskId(taskId);
-                assign.setUserId(userId);
-                assign.setDeptId(user.getDeptId());
-                assign.setAssignType("FILL");
-                assign.setStatus(0);
-                assign.setCreateTime(LocalDateTime.now());
-                rptTaskAssignMapper.insert(assign);
-            }
+        // 安全修复（审计 P1-1）：只删对应类型的分派，
+        // 原实现无论传 FILL 还是 AUDIT 都会先删光全部 FILL 分派，
+        // 导致"只想补审核人"时把填报人全清空。
+        if (hasFill) {
+            rptTaskAssignMapper.delete(
+                    Wrappers.<RptTaskAssign>lambdaQuery()
+                            .eq(RptTaskAssign::getTaskId, taskId)
+                            .eq(RptTaskAssign::getAssignType, "FILL"));
+        }
+        if (hasAudit) {
+            rptTaskAssignMapper.delete(
+                    Wrappers.<RptTaskAssign>lambdaQuery()
+                            .eq(RptTaskAssign::getTaskId, taskId)
+                            .eq(RptTaskAssign::getAssignType, "AUDIT"));
         }
 
-        // 分派审核人员
-        if (auditUserIds != null) {
-            for (Long userId : auditUserIds) {
-                SysUser user = sysUserMapper.selectById(userId);
-                if (user == null) continue;
-                RptTaskAssign assign = new RptTaskAssign();
-                assign.setTaskId(taskId);
-                assign.setUserId(userId);
-                assign.setDeptId(user.getDeptId());
-                assign.setAssignType("AUDIT");
-                assign.setStatus(0);
-                assign.setCreateTime(LocalDateTime.now());
-                rptTaskAssignMapper.insert(assign);
-            }
+        // 分派人（去重 + 无效用户直接报错，不再静默 continue 造成"填报中但无人可填"死任务）
+        int inserted = 0;
+        inserted += insertAssigns(taskId, fillUserIds, "FILL");
+        inserted += insertAssigns(taskId, auditUserIds, "AUDIT");
+        if (inserted == 0) {
+            throw new RuntimeException("没有有效的分派对象（用户不存在或已停用）");
         }
 
-        task.setStatus(2); // 填报中
-        task.setUpdateTime(LocalDateTime.now());
-        rptTaskMapper.updateById(task);
+        // 状态只前进不后退：草稿(0)/已发布(1) → 填报中(2)；已是 2 保持
+        if (task.getStatus() == null || task.getStatus() < 2) {
+            task.setStatus(2); // 填报中
+            task.setUpdateTime(LocalDateTime.now());
+            rptTaskMapper.updateById(task);
+        }
         // P1-F：给被分派人发待办消息（替代原版短信通知）
         try {
             todoService.notifyAssignees(taskId, "【待办】" + task.getTaskName(),
@@ -131,6 +132,40 @@ public class RptTaskService {
         } catch (Exception ignored) {
             // 通知失败不影响分派
         }
+    }
+
+    /**
+     * 写入分派记录（去重、校验用户存在且启用）。
+     *
+     * 审计修复：原实现对无效用户 {@code continue} 静默跳过，
+     * 接口仍返回成功但实际 0 人分派，任务却被置为"填报中"，形成无人可填的死任务。
+     *
+     * @return 实际写入的记录数
+     */
+    private int insertAssigns(Long taskId, List<Long> userIds, String assignType) {
+        if (userIds == null || userIds.isEmpty()) return 0;
+        int n = 0;
+        // 去重，避免重复分派导致"我的任务"重复、统计虚高
+        for (Long userId : new java.util.LinkedHashSet<>(userIds)) {
+            if (userId == null) continue;
+            SysUser user = sysUserMapper.selectById(userId);
+            if (user == null) {
+                throw new RuntimeException("用户不存在: " + userId);
+            }
+            if (user.getStatus() == null || user.getStatus() != 1) {
+                throw new RuntimeException("用户已停用，不能分派: " + user.getUsername());
+            }
+            RptTaskAssign assign = new RptTaskAssign();
+            assign.setTaskId(taskId);
+            assign.setUserId(userId);
+            assign.setDeptId(user.getDeptId());
+            assign.setAssignType(assignType);
+            assign.setStatus(0);
+            assign.setCreateTime(LocalDateTime.now());
+            rptTaskAssignMapper.insert(assign);
+            n++;
+        }
+        return n;
     }
 
     /**
@@ -290,13 +325,35 @@ public class RptTaskService {
         rptTaskMapper.updateById(task);
     }
 
+    /**
+     * 删除任务。
+     *
+     * 一致性修复（审计：高）：原实现只删了 task / assign / data，
+     * 遗留 rpt_file、rpt_task_process、rpt_data_apply、rpt_correct_task 孤儿记录
+     * （本次审计清理时实测产生了 7 条孤儿进程记录）。
+     * 现在把关联表一并清理，并禁止删除已有审批数据或处于进行中的任务。
+     */
     @Transactional
     public void deleteById(Long id) {
+        RptTask task = rptTaskMapper.selectById(id);
+        if (task == null) throw new RuntimeException("任务不存在");
+        // 进行中的任务不允许直接删除（避免填报数据丢失）
+        if (task.getStatus() != null && task.getStatus() == 2) {
+            throw new RuntimeException("任务处于填报中，请先关闭再删除");
+        }
+        // 清理所有关联表，避免产生孤儿数据
         rptTaskMapper.deleteById(id);
         rptTaskAssignMapper.delete(
                 Wrappers.<RptTaskAssign>lambdaQuery().eq(RptTaskAssign::getTaskId, id));
         rptTaskDataMapper.delete(
                 Wrappers.<RptTaskData>lambdaQuery().eq(RptTaskData::getTaskId, id));
+        // 关联的附件、流转轨迹、数据申请、补正批次
+        rptFileMapper.delete(
+                Wrappers.<com.reportsys.model.RptFile>lambdaQuery()
+                        .eq(com.reportsys.model.RptFile::getTaskId, id));
+        jdbcTemplate.update("DELETE FROM rpt_task_process WHERE task_id = ?", id);
+        jdbcTemplate.update("DELETE FROM rpt_data_apply WHERE task_id = ?", id);
+        jdbcTemplate.update("DELETE FROM rpt_correct_task WHERE task_id = ?", id);
     }
 
     public RptTask getById(Long id) {

@@ -104,6 +104,18 @@ public class ReportStatsService {
 
     /** 分页查询台账视图 */
     public Map<String, Object> view(String type, int page, int pageSize) {
+        return view(type, page, pageSize, null);
+    }
+
+    /**
+     * 分页查询台账视图（可按部门名称过滤）。
+     *
+     * 安全修复（审计：/ledger/** 无数据归属过滤）：原先任何 DEPT_ADMIN 都能看全部部门的台账。
+     * 现通过外层包裹 + deptName 等值过滤实现部门级隔离（所有台账视图都有 deptName 列）。
+     *
+     * @param deptNameFilter 非空时只返回该部门的行；null 表示不限制（仅超管使用）
+     */
+    public Map<String, Object> view(String type, int page, int pageSize, String deptNameFilter) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("headers", headers(type));
         if (!isSupported(type)) {
@@ -112,9 +124,22 @@ public class ReportStatsService {
             return result;
         }
         String sql = baseSql(type);
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + sql + ") cnt", Long.class);
+        boolean filtered = deptNameFilter != null && !deptNameFilter.trim().isEmpty();
+        if (filtered) {
+            sql = "SELECT * FROM (" + sql + ") dr_view WHERE dr_view.deptName = ?";
+        }
+        Long total;
+        List<Map<String, Object>> rows;
         int offset = Math.max(0, (page - 1) * pageSize);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql + " LIMIT " + pageSize + " OFFSET " + offset);
+        if (filtered) {
+            total = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM (" + sql + ") cnt", Long.class, deptNameFilter);
+            rows = jdbcTemplate.queryForList(
+                    sql + " LIMIT " + pageSize + " OFFSET " + offset, deptNameFilter);
+        } else {
+            total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM (" + sql + ") cnt", Long.class);
+            rows = jdbcTemplate.queryForList(sql + " LIMIT " + pageSize + " OFFSET " + offset);
+        }
         decorate(type, rows);
         result.put("list", rows);
         result.put("total", total == null ? 0 : total);
@@ -123,8 +148,24 @@ public class ReportStatsService {
 
     /** 导出用：取全量（上限保护） */
     public List<Map<String, Object>> all(String type, int limit) {
+        return all(type, limit, null);
+    }
+
+    /**
+     * 导出用：取全量（可按部门名称过滤）。
+     *
+     * @param deptNameFilter 非空时只导出该部门；null 表示不限制（仅超管使用）
+     */
+    public List<Map<String, Object>> all(String type, int limit, String deptNameFilter) {
         String sql = baseSql(type);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql + " LIMIT " + limit);
+        List<Map<String, Object>> rows;
+        boolean filtered = deptNameFilter != null && !deptNameFilter.trim().isEmpty();
+        if (filtered) {
+            sql = "SELECT * FROM (" + sql + ") dr_view WHERE dr_view.deptName = ?";
+            rows = jdbcTemplate.queryForList(sql + " LIMIT " + limit, deptNameFilter);
+        } else {
+            rows = jdbcTemplate.queryForList(sql + " LIMIT " + limit);
+        }
         decorate(type, rows);
         return rows;
     }

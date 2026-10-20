@@ -1,4 +1,6 @@
 import axios, { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import { message } from 'antd';
+import { clearAuth } from '@/utils/auth';
 
 const request = axios.create({
   baseURL: '/api',
@@ -85,17 +87,56 @@ export function isCanceled(error: any): boolean {
   );
 }
 
+/**
+ * 登录失效处理（仅 401）：清理登录态并跳转登录页。
+ * 加锁避免并发 401 时重复跳转 / 反复刷页面。
+ */
+let redirectingToLogin = false;
+function redirectToLogin(): void {
+  clearAuth();
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  // 3 秒后解锁：既避免并发 401 重复跳转，也不影响用户重新登录后的下一次 401 处理
+  window.setTimeout(() => { redirectingToLogin = false; }, 3000);
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
+/**
+ * 403（无权限）处理：只弹错误提示，不清 localStorage、不跳登录页。
+ *
+ * 后端有大量接口对「无权限角色」返回 403（如非超管访问 /datasource/page、
+ * /user/page、/task/{id}/assign），此前一律按登录失效处理，导致用户打开
+ * 一个无权限的下拉就被强制退出登录。403 只代表当前操作没权限，不代表未登录。
+ * 同一提示 2 秒内去重，避免一个页面并发多个 403 时弹出一串重复 toast。
+ */
+let lastForbidden = { text: '', at: 0 };
+function notifyForbidden(msg?: string): void {
+  const text = msg || '无权限执行该操作';
+  const now = Date.now();
+  if (text === lastForbidden.text && now - lastForbidden.at < 2000) return;
+  lastForbidden = { text, at: now };
+  message.error(text);
+}
+
 // Response interceptor - handle errors
 request.interceptors.response.use(
   (response: AxiosResponse) => {
     releaseController(response.config as InternalAxiosRequestConfig);
+    // 下载类接口（blob/arraybuffer）不套 Result 包装，直接交给 handleDownload 判断成功/失败
+    const responseType = response.config?.responseType;
+    if (responseType === 'blob' || responseType === 'arraybuffer') {
+      return response;
+    }
     const res = response.data;
     // Business error
     if (res.code !== 0 && res.code !== 200) {
-      // Token expired / not logged in
-      if (res.code === 401 || res.code === 403) {
-        localStorage.clear();
-        window.location.href = '/login';
+      // 只有 401 才代表登录态失效；403 仅提示无权限
+      if (res.code === 401) {
+        redirectToLogin();
+      } else if (res.code === 403) {
+        notifyForbidden(res.msg);
       }
       return Promise.reject(new Error(res.msg || 'Request failed'));
     }
@@ -107,9 +148,14 @@ request.interceptors.response.use(
     if (isCanceled(error)) {
       return Promise.reject(error);
     }
-    if (error.response?.status === 401) {
-      localStorage.clear();
-      window.location.href = '/login';
+    const status = error.response?.status;
+    const body = error.response?.data;
+    const serverMsg = body && typeof body === 'object' && typeof body.msg === 'string' ? body.msg : undefined;
+    if (status === 401) {
+      redirectToLogin();
+    } else if (status === 403) {
+      // 403 不清登录态、不跳转，只把后端 msg 提示给用户
+      notifyForbidden(serverMsg);
     }
     return Promise.reject(error);
   }

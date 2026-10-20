@@ -191,17 +191,11 @@ public class AuthController {
     }
 
     /**
-     * 获取客户端IP
+     * 获取客户端IP。
+     * 安全修复：统一走 IpUtils，只有在直连对端是受信代理时才采信 X-Forwarded-For / X-Real-IP，
+     * 避免客户端伪造 IP 绕过登录限流。
      */
     private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isEmpty() && !"unknown".equalsIgnoreCase(xff)) {
-            return xff.split(",")[0].trim();
-        }
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty() && !"unknown".equalsIgnoreCase(xRealIp)) {
-            return xRealIp;
-        }
-        return request.getRemoteAddr();
+        return com.reportsys.common.IpUtils.clientIp(request);
     }
 }

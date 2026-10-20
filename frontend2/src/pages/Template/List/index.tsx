@@ -133,8 +133,8 @@ const TemplateListPage: React.FC = () => {
         </Form>
       </div>
       <div className="table-operations">
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/template/wizard')}>向导新建</Button>
-        <Button style={{ marginLeft: 8 }} onClick={() => navigate('/template/add')}>基础新建</Button>
+        {/* 「基础新建」已下线（用时间戳造假主键、与向导重复创建），统一走向导新建 */}
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/template/wizard')}>新建模板</Button>
       </div>
       <Table
         columns={columns}

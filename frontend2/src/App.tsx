@@ -23,7 +23,6 @@ const ProjectPage = lazy(() => import('@/pages/Org/Project'));
 
 // Template pages
 const TemplateList = lazy(() => import('@/pages/Template/List'));
-const TemplateAdd = lazy(() => import('@/pages/Template/Add'));
 const TemplateDetail = lazy(() => import('@/pages/Template/Detail'));
 const TemplateWizard = lazy(() => import('@/pages/Template/Wizard'));
 
@@ -99,7 +98,9 @@ const App: React.FC = () => {
 
               {/* Template */}
               <Route path="template/list" element={<TemplateList />} />
-              <Route path="template/add" element={<TemplateAdd />} />
+              {/* 原「基础新建」页用时间戳充当模板主键且与向导重复创建，已下线；
+                  后端 sys_menu 仍配置 /template/add，这里重定向到唯一可用的向导页 */}
+              <Route path="template/add" element={<Navigate to="/template/wizard" replace />} />
               <Route path="template/wizard" element={<TemplateWizard />} />
               <Route path="template/detail/:id" element={<TemplateDetail />} />
 

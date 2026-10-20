@@ -2,14 +2,14 @@ import { create } from 'zustand';
 import {
   getFillTaskListApi, getFillTaskDetailApi, submitFillDataApi, saveFillDraftApi,
   getAuditListApi, getAuditDetailApi, submitAuditApi,
-  PageParams, FillTaskItem, FillDataForm, AuditItem, AuditFormParams,
+  PageParams, FillTaskItem, FillDetail, FillSubmitParams, AuditItem, AuditFormParams,
 } from '@/services/api';
 
 interface FillState {
   taskList: FillTaskItem[];
   taskTotal: number;
   taskLoading: boolean;
-  currentFillData: FillDataForm | null;
+  currentFillData: FillDetail | null;
 
   auditList: AuditItem[];
   auditTotal: number;
@@ -17,14 +17,15 @@ interface FillState {
   auditDetail: any;
 
   fetchTaskList: (params: PageParams) => Promise<void>;
-  fetchFillDetail: (assignId: number) => Promise<void>;
-  submitFill: (data: FillDataForm) => Promise<void>;
-  saveDraft: (data: FillDataForm) => Promise<void>;
+  /** 按 taskId 拉取填报详情（后端 GET /fill/task/{taskId}） */
+  fetchFillDetail: (taskId: number) => Promise<FillDetail | null>;
+  submitFill: (data: FillSubmitParams) => Promise<void>;
+  saveDraft: (data: FillSubmitParams) => Promise<void>;
 
   fetchAuditList: (params: PageParams & { auditType?: 'dept' | 'task' }) => Promise<void>;
   fetchAuditDetail: (id: number) => Promise<void>;
   submitAudit: (data: AuditFormParams) => Promise<void>;
-  setCurrentFillData: (data: FillDataForm | null) => void;
+  setCurrentFillData: (data: FillDetail | null) => void;
 }
 
 export const useFillStore = create<FillState>((set) => ({
@@ -49,16 +50,18 @@ export const useFillStore = create<FillState>((set) => ({
     }
   },
 
-  fetchFillDetail: async (assignId: number) => {
-    const res = await getFillTaskDetailApi(assignId);
-    set({ currentFillData: res.data.data });
+  fetchFillDetail: async (taskId: number) => {
+    const res = await getFillTaskDetailApi(taskId);
+    const detail = res.data.data ?? null;
+    set({ currentFillData: detail });
+    return detail;
   },
 
-  submitFill: async (data: FillDataForm) => {
+  submitFill: async (data: FillSubmitParams) => {
     await submitFillDataApi(data);
   },
 
-  saveDraft: async (data: FillDataForm) => {
+  saveDraft: async (data: FillSubmitParams) => {
     await saveFillDraftApi(data);
   },
 
@@ -82,7 +85,7 @@ export const useFillStore = create<FillState>((set) => ({
     await submitAuditApi(data);
   },
 
-  setCurrentFillData: (data: FillDataForm | null) => {
+  setCurrentFillData: (data: FillDetail | null) => {
     set({ currentFillData: data });
   },
 }));

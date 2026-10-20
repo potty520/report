@@ -124,14 +124,24 @@ public class FileStorageService {
         }
     }
 
-    /** 秒传/断点续传检查：返回已上传分片与是否可秒传 */
-    public Map<String, Object> checkChunks(String fileKey, String fileName, String md5) {
+    /**
+     * 秒传/断点续传检查：返回已上传分片与是否可秒传。
+     *
+     * 安全修复（审计 H6）：原实现按 md5 <b>全局</b>查重并直接返回他人文件的 fileId，
+     * 攻击者只要知道某个 md5 就能"秒传"拿到别人附件的 id，再走下载接口取内容。
+     *
+     * 现在秒传只认<b>同一上传人</b>的已有文件；其他用户的同 md5 文件由调用方自己去重
+     * （store 内部也会按 uploadBy 隔离），不会泄露 fileId。
+     */
+    public Map<String, Object> checkChunks(String fileKey, String fileName, String md5, Long uploadBy) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("fileKey", fileKey);
         result.put("uploadedChunks", uploadedChunks(fileKey));
-        if (StrUtil.isNotBlank(md5)) {
+        if (StrUtil.isNotBlank(md5) && uploadBy != null) {
             RptFile exist = rptFileMapper.selectOne(Wrappers.<RptFile>lambdaQuery()
-                    .eq(RptFile::getMd5, md5).eq(RptFile::getDeleted, 0).last("limit 1"));
+                    .eq(RptFile::getMd5, md5)
+                    .eq(RptFile::getUploadBy, uploadBy)
+                    .eq(RptFile::getDeleted, 0).last("limit 1"));
             if (exist != null) {
                 result.put("skipUpload", true);
                 result.put("fileId", exist.getId());
@@ -214,9 +224,16 @@ public class FileStorageService {
         // 缺陷修复(G07)：store() 是所有落盘路径的唯一入口（普通上传 + 分片合并都走这里），
         // 在入口统一做后缀白名单，避免某条路径漏校验。
         assertExtensionAllowed(fileName);
-        // 秒传：同 md5 已存在则直接复用
-        RptFile exist = rptFileMapper.selectOne(Wrappers.<RptFile>lambdaQuery()
-                .eq(RptFile::getMd5, md5).eq(RptFile::getDeleted, 0).last("limit 1"));
+        // 秒传：同 md5 已存在则直接复用。
+        // 安全修复（审计 H6）：只复用<b>同一上传人</b>的文件，
+        // 否则 A 上传后 B 传同内容会拿到 A 的文件记录（越权下载/删除他人附件）。
+        RptFile exist = null;
+        if (uploadBy != null) {
+            exist = rptFileMapper.selectOne(Wrappers.<RptFile>lambdaQuery()
+                    .eq(RptFile::getMd5, md5)
+                    .eq(RptFile::getUploadBy, uploadBy)
+                    .eq(RptFile::getDeleted, 0).last("limit 1"));
+        }
         if (exist != null) {
             log.info("命中秒传: {} -> fileId={}", fileName, exist.getId());
             return exist;

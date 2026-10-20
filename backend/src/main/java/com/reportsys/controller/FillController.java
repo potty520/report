@@ -30,6 +30,33 @@ public class FillController {
     private RptTaskDataService rptTaskDataService;
     @Autowired
     private com.reportsys.service.FileStorageService fileStorageService;
+    @Autowired
+    private com.reportsys.service.AuthzService authzService;
+    @Autowired
+    private com.reportsys.service.RptTaskService rptTaskService;
+
+    /**
+     * 我被分派的填报任务列表（含"尚未填报"的任务）。
+     *
+     * 功能补全（前端审计发现）：{@code /fill/task/page} 查的是 rpt_task_data，
+     * 只有"存过草稿或提交过"的任务才会出现；被分派但从未保存的任务看不到，
+     * 导致首次填报没有入口。本接口直接返回分派任务（含未填报），供填报页展示待办。
+     *
+     * 实现说明：复用 RptTaskService.getMyTaskList（原先已有实现但没有暴露成接口）。
+     */
+    @GetMapping("/my-assigned")
+    public Result<PageResult<com.reportsys.model.RptTask>> myAssigned(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) Integer status) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            return Result.success(rptTaskService.getMyTaskList(page, pageSize, userId, status));
+        } catch (RuntimeException e) {
+            return Result.error(Result.sanitizeMessage(e.getMessage()));
+        }
+    }
 
     /**
      * 我的填报任务列表(分页)
@@ -213,23 +240,35 @@ public class FillController {
     }
 
     /**
-     * 预览目标表已入库数据
+     * 预览目标表已入库数据。
+     *
+     * 安全修复（审计 H2）：原方法<b>没有任何归属校验</b>，
+     * 任意 FILL_USER 传任意 taskId 就能读取该任务的全量物化表数据。
+     * 现要求：必须被分派到该任务（assertCanFill），或为超管。
      */
     @GetMapping("/{taskId}/target-rows")
     public Result<List<Map<String, Object>>> targetRows(@PathVariable Long taskId,
                                                          @RequestParam(defaultValue = "50") int limit) {
         try {
+            authzService.assertCanFill(taskId, getCurrentUserId());
             return Result.success(rptTaskDataService.queryTargetRows(taskId, limit));
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
+            return Result.error(Result.sanitizeMessage(e.getMessage()));
         }
     }
 
     /**
-     * 导出任务数据（从目标物化表读取，xlsx 下载）
+     * 导出任务数据（从目标物化表读取，xlsx 下载）。
+     *
+     * 安全修复（审计 H2）：同 targetRows，原先无任何归属校验，
+     * 任一填报员可导出任意任务的全量数据（审计报告标注为"最大数据泄露面"）。
+     * 现在导出前统一做分派归属校验。
      */
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam Long taskId) {
+        authzService.assertCanFill(taskId, getCurrentUserId());
         Map<String, Object> result = rptTaskDataService.exportTaskData(taskId);
         byte[] content = (byte[]) result.get("content");
         String fileName = com.reportsys.common.WebUtils.encodeFileName(String.valueOf(result.get("fileName")));

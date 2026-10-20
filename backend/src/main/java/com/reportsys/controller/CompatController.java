@@ -70,6 +70,8 @@ public class CompatController {
     private SysMenuMapper sysMenuMapper;
     @Autowired
     private RptDatasourceMapper rptDatasourceMapper;
+    @Autowired
+    private com.reportsys.service.AuthzService authzService;
 
     /** 当前登录用户（前端 useAuthStore.initialize 会调用；主体是 userId 字符串） */
     @GetMapping("/auth/current-user")
@@ -171,36 +173,76 @@ public class CompatController {
         return Result.success();
     }
 
-    /** 数据申请详情 */
+    /**
+     * 数据申请详情。
+     *
+     * 安全修复（审计 S2）：原方法<b>既无类级也无方法级 @PreAuthorize</b>，
+     * 任意登录用户都能按 id 读取任何人的数据申请。现要求登录，且仅申请人本人或超管可读。
+     */
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/dataApply/{id}")
     public Result<RptDataApply> dataApplyById(@PathVariable Long id) {
         RptDataApply apply = rptDataApplyMapper.selectById(id);
         if (apply == null) {
             return Result.error("申请不存在");
         }
+        // 归属校验：仅本人或超管
+        authzService.assertDataOwnerOrAdmin(apply.getApplicantId());
         return Result.success(apply);
     }
 
-    /** 修改数据申请（仅允许改原因等描述字段，状态流转仍走审批接口） */
+    /**
+     * 修改数据申请（仅允许申请人改原因等描述字段，状态流转仍走审批接口）。
+     *
+     * 安全修复（审计 S2）：
+     *   ① 补 @PreAuthorize（原先完全没有鉴权）；
+     *   ② 补归属校验——仅申请人本人可改；
+     *   ③ <b>禁止修改 taskId</b>——原先可把申请挂到任意任务上，属越权改数据；
+     *   ④ 仅「待审(0)」状态可改，已审批的申请不可再篡改。
+     */
+    @PreAuthorize("isAuthenticated()")
     @PutMapping("/dataApply/{id}")
     public Result<Void> updateDataApply(@PathVariable Long id, @RequestBody RptDataApply apply) {
         RptDataApply exist = rptDataApplyMapper.selectById(id);
         if (exist == null) {
             return Result.error("申请不存在");
         }
+        // 归属校验：仅申请人本人或超管
+        authzService.assertDataOwnerOrAdmin(exist.getApplicantId());
+        // 状态校验：只有待审批的申请还能改
+        if (exist.getStatus() != null && exist.getStatus() != 0) {
+            return Result.error("该申请已审批，不能修改");
+        }
         if (apply.getReason() != null) {
             exist.setReason(apply.getReason());
         }
-        if (apply.getTaskId() != null) {
-            exist.setTaskId(apply.getTaskId());
-        }
+        // 安全修复：不再允许修改 taskId（原实现可把申请挂到任意任务）
         rptDataApplyMapper.updateById(exist);
         return Result.success();
     }
 
-    /** 删除数据申请 */
+    /**
+     * 删除数据申请。
+     *
+     * 安全修复（审计 S2）：原方法无任何鉴权，任意登录用户可删任何人的申请（审计链条断裂）。
+     * 现限制为：申请人本人可删自己的「待审」申请，或超管可删任意申请。
+     */
+    @PreAuthorize("isAuthenticated()")
     @DeleteMapping("/dataApply/{id}")
     public Result<Void> deleteDataApply(@PathVariable Long id) {
+        RptDataApply exist = rptDataApplyMapper.selectById(id);
+        if (exist == null) {
+            return Result.error("申请不存在");
+        }
+        if (!authzService.isAdmin()) {
+            Long me = authzService.requireUserId();
+            if (exist.getApplicantId() == null || !exist.getApplicantId().equals(me)) {
+                return Result.error("无权删除他人的数据申请");
+            }
+            if (exist.getStatus() != null && exist.getStatus() != 0) {
+                return Result.error("该申请已审批，不能删除");
+            }
+        }
         rptDataApplyMapper.deleteById(id);
         return Result.success();
     }

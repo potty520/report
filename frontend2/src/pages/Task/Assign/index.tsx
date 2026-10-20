@@ -76,16 +76,21 @@ const TaskAssignPage: React.FC = () => {
         msg.warning('请选择至少一个部门');
         return;
       }
+      // 后端 TaskController.assign 的 assignType 是必填 @RequestParam（没有 required=false），
+      // 缺参直接 400。本页只有「任务分派」一个入口，语义为填报分派 → FILL。
       await assignTask({
         taskId: values.taskId,
         deptIds: targetKeys.map(Number),
+        assignType: 'FILL',
       });
       msg.success('任务分派成功');
       setModalOpen(false);
       doFetch(searchParams);
     } catch (error: any) {
-      if (error.errorFields) return;
-      msg.error('分派失败');
+      // 表单校验失败由 Form 自己提示，不弹 toast
+      if (error?.errorFields) return;
+      // 把后端返回的 msg 透出，避免"分派失败"这类无信息提示
+      msg.error(error?.response?.data?.msg || error?.message || '分派失败');
     }
   };
 

@@ -23,6 +23,8 @@ public class AuditController {
 
     @Autowired
     private RptTaskDataService rptTaskDataService;
+    @Autowired
+    private com.reportsys.service.AuthzService authzService;
 
     /**
      * 我的审核任务列表(分页)
@@ -45,16 +47,26 @@ public class AuditController {
     }
 
     /**
-     * 审核详情(通过taskId获取该任务下的填报数据列表)
+     * 审核详情(通过taskId获取该任务下的填报数据列表)。
+     *
+     * 安全修复（审计 H2 同类）：原实现传 null 作为 auditUserId，
+     * <b>任何审核用户传任意 taskId 就能读到该任务的全部填报数据</b>（含不属于自己的任务）。
+     * 现要求审核人必须是该任务的 AUDIT 分派人（或超管），复用 assertCanAudit 的归属判断。
      */
     @GetMapping("/task/{taskId}")
     public Result<PageResult<RptTaskData>> getAuditDetail(@PathVariable Long taskId) {
         try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            // 归属校验：非超管必须有该任务的审核分派
+            authzService.assertCanAudit(taskId, null, userId);
             PageResult<RptTaskData> result = rptTaskDataService.getAuditList(1, 1000, null,
                     null, taskId);
             return Result.success(result);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
-            return Result.error(e.getMessage());
+            return Result.error(Result.sanitizeMessage(e.getMessage()));
         }
     }
 

@@ -69,10 +69,15 @@ export interface CaptchaResult {
   captchaImage: string; // base64
 }
 
+/**
+ * 修改密码参数。
+ *
+ * 后端 AuthController.updatePassword 用 @RequestParam 接收明文密码并直接做 BCrypt 比对，
+ * 没有任何解密逻辑，因此这里必须是明文，且走 query/form 而不是 JSON body。
+ */
 export interface ChangePasswordParams {
   oldPassword: string;
   newPassword: string;
-  confirmPassword: string;
 }
 
 // ==================== User Management ====================
@@ -233,6 +238,12 @@ export interface TemplateField {
   required: number;
   sort: number;
   options?: string; // JSON for select options
+  /** 后端 rpt_template_field.fieldCode：dataJson 解析时优先按它取 key */
+  fieldCode?: string;
+  dbColumn?: string;
+  fieldLength?: number;
+  /** 后端字段（与 required 同义，API 层归一化时两个都会填） */
+  isRequired?: number;
 }
 
 export interface TemplateFormParams {
@@ -323,8 +334,12 @@ export interface TaskAssignItem {
 
 export interface TaskAssignFormParams {
   taskId: number;
-  deptIds: number[];
-  projectId?: number;
+  /** 后端 @RequestParam(required = false) List<Long> deptIds */
+  deptIds?: number[];
+  /** 后端 @RequestParam(required = false) List<Long> userIds */
+  userIds?: number[];
+  /** 后端 @RequestParam String assignType（必填）：FILL=填报分派 AUDIT=审核分派 */
+  assignType: 'FILL' | 'AUDIT';
 }
 
 export interface TaskLedgerItem {
@@ -342,20 +357,47 @@ export interface TaskLedgerItem {
 }
 
 // ==================== Fill ====================
+/**
+ * 填报列表/详情行。
+ *
+ * 后端 /fill/task/page、/fill/task/{taskId} 直接返回 rpt_task_data 实体：
+ * 里面只有 taskId，**没有分配记录主键字段**。旧前端误把不存在的分配ID当作 taskId，
+ * 请求会变成 /fill/task/undefined，数据填报整条链路全错位。
+ */
 export interface FillTaskItem {
   id: number;
-  assignId: number;
-  taskName: string;
-  templateName: string;
-  status: number; // 0=未填报 1=已填报 2=已提交
-  startDate: string;
-  endDate: string;
-  assignTime: string;
+  taskId: number;
+  templateId?: number;
+  taskName?: string;
+  templateName?: string;
+  deptName?: string;
+  status: number; // 0=草稿(未提交) 1=已提交
+  auditStatus?: number;
+  dataJson?: string;
+  fileUrl?: string;
+  fileName?: string;
+  submitTime?: string;
+  createTime?: string;
 }
 
-export interface FillDataForm {
-  assignId: number;
-  fields: { fieldName: string; fieldValue: string }[];
+/** 填报详情（GET /fill/task/{taskId}，后端注释即「填报详情(通过taskId)」） */
+export type FillDetail = FillTaskItem;
+
+/** 提交 / 保存草稿参数：后端全部用 @RequestParam 接收，不是 JSON body */
+export interface FillSubmitParams {
+  taskId: number;
+  /** JSON.stringify 后的填报内容，key 使用模板字段的 fieldCode / fieldName */
+  dataJson: string;
+  fileUrl?: string;
+}
+
+/** 附件上传结果（POST /fill/upload） */
+export interface FillUploadResult {
+  fileId: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize?: string;
+  md5?: string;
 }
 
 export interface AuditItem {
@@ -447,7 +489,8 @@ export async function getCurrentUserApi() {
 }
 
 export async function changePasswordApi(params: ChangePasswordParams) {
-  return request.put<ApiResponse<null>>('/auth/password', params);
+  // 后端是 PUT /auth/password，参数为 @RequestParam(旧/新密码)，明文，不走 JSON body
+  return request.put<ApiResponse<null>>('/auth/password', null, { params });
 }
 
 // --- User ---
@@ -932,11 +975,17 @@ export async function getTaskAssignListApi(params: PageParams) {
 
 export async function assignTaskApi(data: TaskAssignFormParams) {
   // 后端端点是 POST /task/{id}/assign（query 参数 deptIds/userIds/assignType）
-  const d = data as unknown as Record<string, any>;
-  const taskId = d.taskId;
-  return request.post<ApiResponse<null>>(`/task/${taskId}/assign`, {}, {
-    params: { deptIds: d.deptIds, userIds: d.userIds, assignType: d.assignType },
-  });
+  // 注意：
+  // 1) assignType 是后端必填参数（没有 required=false），缺参直接 400，必须显式传 FILL/AUDIT；
+  // 2) 后端用 @RequestParam List<Long> 接收，axios 默认会序列化成 deptIds[]=1&deptIds[]=2，
+  //    Spring 无法绑定这种带方括号的参数名，这里改成逗号分隔（Spring 支持 String→List 转换）。
+  const taskId = data.taskId;
+  const params: Record<string, any> = {
+    assignType: data.assignType,
+  };
+  if (data.deptIds && data.deptIds.length > 0) params.deptIds = data.deptIds.join(',');
+  if (data.userIds && data.userIds.length > 0) params.userIds = data.userIds.join(',');
+  return request.post<ApiResponse<null>>(`/task/${taskId}/assign`, {}, { params });
 }
 
 export async function cancelAssignApi(id: number) {
@@ -953,16 +1002,43 @@ export async function getFillTaskListApi(params: PageParams) {
   return request.get<ApiResponse<PageResult<FillTaskItem>>>('/fill/task/page', { params });
 }
 
-export async function getFillTaskDetailApi(assignId: number) {
-  return request.get<ApiResponse<FillDataForm>>(`/fill/task/${assignId}`);
+export async function getFillTaskDetailApi(taskId: number) {
+  // 后端：GET /fill/task/{taskId}，按 taskId 查当前用户在该任务下的填报数据
+  return request.get<ApiResponse<FillDetail>>(`/fill/task/${taskId}`);
 }
 
-export async function submitFillDataApi(data: FillDataForm) {
-  return request.post<ApiResponse<null>>('/fill/submit', data);
+/** 把参数对象转成 application/x-www-form-urlencoded 的 body（后端 @RequestParam 只认 query/form） */
+function toFormBody(data: Record<string, any>): URLSearchParams {
+  const body = new URLSearchParams();
+  Object.keys(data).forEach((key) => {
+    const value = data[key];
+    if (value !== undefined && value !== null) body.append(key, String(value));
+  });
+  return body;
 }
 
-export async function saveFillDraftApi(data: FillDataForm) {
-  return request.post<ApiResponse<null>>('/fill/save', data);
+export async function submitFillDataApi(data: FillSubmitParams) {
+  // 后端 POST /fill/submit：@RequestParam taskId / dataJson / fileUrl
+  return request.post<ApiResponse<null>>('/fill/submit', toFormBody(data), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+}
+
+export async function saveFillDraftApi(data: FillSubmitParams) {
+  // 后端 POST /fill/save：参数同上
+  return request.post<ApiResponse<null>>('/fill/save', toFormBody(data), {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+}
+
+/** 填报附件上传：后端 POST /fill/upload（multipart），返回 fileUrl */
+export async function uploadFillFileApi(file: File, taskId?: number) {
+  const fd = new FormData();
+  fd.append('file', file);
+  if (taskId != null) fd.append('taskId', String(taskId));
+  return request.post<ApiResponse<FillUploadResult>>('/fill/upload', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
 }
 
 // --- Audit ---

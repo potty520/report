@@ -247,3 +247,24 @@ CREATE INDEX IF NOT EXISTS idx_file_md5 ON rpt_file(md5);
 -- 注意：rpt_task_process（流转轨迹表）由业务侧首次写入时创建，不在本 schema 内，
 -- 因此这里不在 schema.sql 里为它建索引；生产库请用下面的语句手动补：
 --   CREATE INDEX idx_task_process_task_id ON rpt_task_process(task_id);
+
+-- ============================================================
+-- 业务唯一约束（审计：严重级）
+--
+-- 背景：这三处缺失导致
+--   1. 同一人同一任务可产生多条填报数据 → 后续 selectOne 抛 TooManyResults，
+--      该用户该任务从此无法保存/提交/审核（永久锁死）；
+--   2. 可重复分派同一人 → "我的任务"重复、统计虚高；
+--   3. 周期任务可重复生成 → 多实例部署时每实例各生成一遍。
+--
+-- 落地顺序：必须先确认存量无重复数据，再加唯一约束，否则 DDL 直接失败。
+--   体检 SQL：
+--     SELECT task_id, fill_user_id, COUNT(*) FROM rpt_task_data GROUP BY 1,2 HAVING COUNT(*)>1;
+--     SELECT task_id, assign_type, user_id, COUNT(*) FROM rpt_task_assign GROUP BY 1,2,3 HAVING COUNT(*)>1;
+--     SELECT parent_task_id, belong_time, dept_id, COUNT(*) FROM rpt_task
+--       WHERE parent_task_id IS NOT NULL GROUP BY 1,2,3 HAVING COUNT(*)>1;
+-- ============================================================
+CREATE UNIQUE INDEX IF NOT EXISTS uk_task_data_user ON rpt_task_data(task_id, fill_user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_task_assign ON rpt_task_assign(task_id, assign_type, user_id);
+-- 注意：MySQL 唯一索引允许多个 NULL，普通任务（parent_task_id 为 NULL）不受影响
+CREATE UNIQUE INDEX IF NOT EXISTS uk_periodic ON rpt_task(parent_task_id, belong_time, dept_id);

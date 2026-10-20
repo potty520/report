@@ -41,6 +41,12 @@ public class RptTemplateService {
     private MaterializeService materializeService;
     @Autowired
     private ExcelService excelService;
+    @Autowired
+    private RptTaskMapper rptTaskMapper;
+    @Autowired
+    private RptTaskDataMapper rptTaskDataMapper;
+    @Autowired
+    private RptTemplateAuthMapper rptTemplateAuthMapper;
 
     /**
      * 解析上传的 Excel 模板表头，返回可用的字段建议（不入库）
@@ -259,10 +265,31 @@ public class RptTemplateService {
     }
 
     /**
-     * 删除模板
+     * 删除模板。
+     *
+     * 安全/一致性修复（审计：严重级）：原实现直接物理删除，<b>完全不检查引用</b>，
+     * 导致生产库 55 条任务引用已删除模板 template_id=2，这些任务的填报功能彻底不可用
+     * （commitToTarget / exportTaskData / queryTargetRows 均报"模板不存在"）。
+     *
+     * 现在删除前检查下游引用：任务、填报数据、模板授权，任一存在则拒绝。
      */
     @Transactional
     public void deleteById(Long id) {
+        Long taskCount = rptTaskMapper.selectCount(
+                Wrappers.<RptTask>lambdaQuery().eq(RptTask::getTemplateId, id));
+        if (taskCount != null && taskCount > 0) {
+            throw new RuntimeException("该模板下存在 " + taskCount + " 个任务，无法删除，请先删除或迁移任务");
+        }
+        Long dataCount = rptTaskDataMapper.selectCount(
+                Wrappers.<RptTaskData>lambdaQuery().eq(RptTaskData::getTemplateId, id));
+        if (dataCount != null && dataCount > 0) {
+            throw new RuntimeException("该模板下存在 " + dataCount + " 条填报数据，无法删除");
+        }
+        Long authCount = rptTemplateAuthMapper.selectCount(
+                Wrappers.<RptTemplateAuth>lambdaQuery().eq(RptTemplateAuth::getTemplateId, id));
+        if (authCount != null && authCount > 0) {
+            throw new RuntimeException("该模板存在 " + authCount + " 条授权记录，无法删除，请先解除授权");
+        }
         rptTemplateMapper.deleteById(id);
         rptTemplateFieldMapper.delete(
                 Wrappers.<RptTemplateField>lambdaQuery().eq(RptTemplateField::getTemplateId, id));

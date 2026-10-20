@@ -32,6 +32,8 @@ public class FileController {
 
     @Autowired
     private FileStorageService fileStorageService;
+    @Autowired
+    private com.reportsys.service.AuthzService authzService;
 
     /** 普通上传 */
     @PostMapping("/upload")
@@ -62,13 +64,13 @@ public class FileController {
         }
     }
 
-    /** 断点续传/秒传检查 */
+    /** 断点续传/秒传检查（安全修复：秒传只认本人文件，不再全局复用他人 fileId） */
     @GetMapping("/chunk/check")
     public Result<Map<String, Object>> checkChunk(@RequestParam String fileKey,
                                                    @RequestParam(required = false) String fileName,
                                                    @RequestParam(required = false) String md5) {
         try {
-            return Result.success(fileStorageService.checkChunks(fileKey, fileName, md5));
+            return Result.success(fileStorageService.checkChunks(fileKey, fileName, md5, currentUserId()));
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
@@ -94,16 +96,26 @@ public class FileController {
     @GetMapping("/list")
     public Result<List<RptFile>> list(@RequestParam Long taskId) {
         try {
+            // 安全修复：补任务归属校验，避免任意用户按 taskId 列出他人任务的全部附件
+            authzService.assertCanFill(taskId, currentUserId());
             return Result.success(fileStorageService.listByTask(taskId));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
+            return Result.error(com.reportsys.common.Result.sanitizeMessage(e.getMessage()));
         }
     }
 
-    /** 下载 */
+    /**
+     * 下载。
+     *
+     * 安全修复（审计：/file/{id}/download 无归属校验）：原先遍历 id 即可下载全公司附件。
+     * 现要求：超管 / 文件上传者本人 / 该文件所属任务的被分派人，三者之一。
+     */
     @GetMapping("/{id}/download")
     public ResponseEntity<byte[]> download(@PathVariable Long id) {
         RptFile file = fileStorageService.getById(id);
+        assertFileAccessible(file);
         byte[] content = fileStorageService.readBytes(id);
         String fileName = com.reportsys.common.WebUtils.encodeFileName(file.getFileName());
         return ResponseEntity.ok()
@@ -112,15 +124,38 @@ public class FileController {
                 .body(content);
     }
 
-    /** 删除（软删除） */
+    /** 删除（软删除）。安全修复：同下载，补归属校验。 */
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         try {
+            RptFile file = fileStorageService.getById(id);
+            assertFileAccessible(file);
             fileStorageService.delete(id);
             return Result.success();
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            throw e;
         } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
+            return Result.error(com.reportsys.common.Result.sanitizeMessage(e.getMessage()));
         }
+    }
+
+    /**
+     * 附件访问控制：超管 / 上传者本人 / 所属任务的被分派人。
+     *
+     * 说明：文件若未挂任务（taskId 为空），仅上传者本人与超管可访问，
+     * 避免「无主文件」成为越权通道。
+     */
+    private void assertFileAccessible(RptFile file) {
+        if (file == null) throw new RuntimeException("文件不存在或已删除");
+        if (authzService.isAdmin()) return;
+        Long me = authzService.requireUserId();
+        if (file.getUploadBy() != null && file.getUploadBy().equals(me)) return;
+        if (file.getTaskId() != null) {
+            // 被分派到该任务的用户可以访问该任务的附件（内部会做超管放行）
+            authzService.assertCanFill(file.getTaskId(), me);
+            return;
+        }
+        throw new org.springframework.security.access.AccessDeniedException("无权访问该附件");
     }
 
     private Long currentUserId() {

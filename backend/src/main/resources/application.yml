@@ -59,6 +59,11 @@ report:
     key: ${REPORT_CRYPTO_KEY:}
   captcha:
     fixed-code: ${REPORT_CAPTCHA_FIXED_CODE:}
+  # CORS：默认不开启（前后端同源部署经 nginx 反代 /api，无需跨域）。
+  #   如需跨域，配置精确来源（逗号分隔），禁止使用通配符 '*'：
+  #     REPORT_CORS_ALLOWED_ORIGINS="https://report.example.com"
+  cors:
+    allowed-origins: ${REPORT_CORS_ALLOWED_ORIGINS:}
   datasource:
     test:
       allowed-hosts: ${REPORT_DS_TEST_ALLOWED_HOSTS:}
