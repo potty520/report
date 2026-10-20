@@ -125,7 +125,10 @@ CREATE TABLE IF NOT EXISTS rpt_template (
     audit_comment VARCHAR(256) DEFAULT '',
     create_by BIGINT,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- 物化状态：0未物化 1已建表
+    materialized TINYINT DEFAULT 0,
+    materialized_time TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS rpt_template_field (
@@ -155,7 +158,19 @@ CREATE TABLE IF NOT EXISTS rpt_task (
     audit_deadline TIMESTAMP,
     create_by BIGINT,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- 双通道审核与补正相关（原先只在生产库有，H2/纯净库缺列会导致代码报错）
+    dept_audit_status TINYINT DEFAULT 0,
+    dept_audit_user_id BIGINT,
+    dept_audit_time TIMESTAMP,
+    task_audit_status TINYINT DEFAULT 0,
+    task_audit_user_id BIGINT,
+    task_audit_time TIMESTAMP,
+    correct_status TINYINT DEFAULT 0,
+    correct_way TINYINT,
+    -- 周期任务：子任务指向父任务，generate_batch 记录生成批次
+    parent_task_id BIGINT,
+    generate_batch VARCHAR(32) DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS rpt_task_assign (
@@ -183,6 +198,24 @@ CREATE TABLE IF NOT EXISTS rpt_task_data (
     audit_comment VARCHAR(256) DEFAULT '',
     audit_user_id BIGINT,
     audit_time TIMESTAMP,
+    -- 入库（物化表写入）状态：0未入库 1成功 2失败
+    inbound_status TINYINT DEFAULT 0,
+    inbound_time TIMESTAMP,
+    inbound_rows INT DEFAULT 0,
+    error_msg VARCHAR(1000) DEFAULT '',
+    -- 双通道审核（部门 / 任务方）
+    dept_audit_status TINYINT DEFAULT 0,
+    dept_audit_user_id BIGINT,
+    dept_audit_time TIMESTAMP,
+    dept_audit_comment VARCHAR(512) DEFAULT '',
+    task_audit_status TINYINT DEFAULT 0,
+    task_audit_user_id BIGINT,
+    task_audit_time TIMESTAMP,
+    task_audit_comment VARCHAR(512) DEFAULT '',
+    -- 补正
+    correct_status TINYINT DEFAULT 0,
+    correct_way TINYINT,
+    correct_comment VARCHAR(512) DEFAULT '',
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -268,3 +301,170 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_task_data_user ON rpt_task_data(task_id, fi
 CREATE UNIQUE INDEX IF NOT EXISTS uk_task_assign ON rpt_task_assign(task_id, assign_type, user_id);
 -- 注意：MySQL 唯一索引允许多个 NULL，普通任务（parent_task_id 为 NULL）不受影响
 CREATE UNIQUE INDEX IF NOT EXISTS uk_periodic ON rpt_task(parent_task_id, belong_time, dept_id);
+
+-- ============================================================
+-- >>> AUTO-GENERATED: MISSING TABLES
+-- 来源：生产库 SHOW CREATE TABLE（MySQL），已转成 H2/MySQL 双兼容语法
+-- 解决：原 schema.sql 只建 13 张表，代码读写的下列表未定义，
+--       缺失时写操作被 catch(Exception ignored) 吞掉 → 功能静默失效
+-- ============================================================
+CREATE TABLE IF NOT EXISTS rpt_task_process (
+  id bigint NOT NULL AUTO_INCREMENT,
+  task_id bigint NOT NULL,
+  data_id bigint DEFAULT NULL,
+  node_code varchar(64) NOT NULL,
+  node_name varchar(64) DEFAULT '',
+  action varchar(32) DEFAULT '',
+  operator_id bigint DEFAULT NULL,
+  operator_name varchar(32) DEFAULT '',
+  comment varchar(512) DEFAULT '',
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_process_task ON rpt_task_process(task_id);
+
+CREATE TABLE IF NOT EXISTS rpt_correct_task (
+  id bigint NOT NULL AUTO_INCREMENT,
+  task_id bigint NOT NULL,
+  data_ids varchar(1000) DEFAULT '',
+  start_user_id bigint DEFAULT NULL,
+  start_time datetime DEFAULT CURRENT_TIMESTAMP,
+  close_user_id bigint DEFAULT NULL,
+  close_time datetime DEFAULT NULL,
+  status tinyint DEFAULT '1',
+  comment varchar(512) DEFAULT '',
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_correct_task ON rpt_correct_task(task_id);
+
+CREATE TABLE IF NOT EXISTS rpt_schedule_log (
+  id bigint NOT NULL AUTO_INCREMENT,
+  job_name varchar(64) NOT NULL,
+  batch varchar(32) DEFAULT '',
+  created_count int DEFAULT '0',
+  detail varchar(2000) DEFAULT '',
+  status tinyint DEFAULT '1',
+  cost_ms bigint DEFAULT '0',
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS rpt_oper_log (
+  id bigint NOT NULL AUTO_INCREMENT,
+  user_id bigint DEFAULT NULL,
+  username varchar(32) DEFAULT '',
+  module varchar(64) DEFAULT '',
+  action varchar(64) DEFAULT '',
+  target varchar(128) DEFAULT '',
+  detail varchar(2000) DEFAULT '',
+  ip varchar(64) DEFAULT '',
+  cost_ms bigint DEFAULT '0',
+  status tinyint DEFAULT '1',
+  error_msg varchar(1000) DEFAULT '',
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_log_user ON rpt_oper_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_log_time ON rpt_oper_log(create_time);
+CREATE INDEX IF NOT EXISTS idx_log_module ON rpt_oper_log(module);
+CREATE INDEX IF NOT EXISTS idx_log_action ON rpt_oper_log(action);
+
+CREATE TABLE IF NOT EXISTS rpt_quality_report (
+  id bigint NOT NULL AUTO_INCREMENT,
+  task_data_id bigint NOT NULL,
+  task_id bigint DEFAULT NULL,
+  template_id bigint DEFAULT NULL,
+  provider varchar(32) DEFAULT NULL,
+  status varchar(16) DEFAULT 'PENDING',
+  report_id varchar(128) DEFAULT NULL,
+  report_url varchar(500) DEFAULT NULL,
+  message varchar(500) DEFAULT NULL,
+  create_by bigint DEFAULT NULL,
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  update_time datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS uk_quality_task_data ON rpt_quality_report(task_data_id);
+
+CREATE TABLE IF NOT EXISTS rpt_sms_log (
+  id bigint NOT NULL AUTO_INCREMENT,
+  user_id bigint DEFAULT NULL,
+  task_id bigint DEFAULT NULL,
+  biz_type varchar(16) DEFAULT NULL,
+  phone varchar(32) DEFAULT NULL,
+  template_code varchar(64) DEFAULT NULL,
+  provider varchar(32) DEFAULT NULL,
+  success tinyint DEFAULT '0',
+  message_id varchar(64) DEFAULT NULL,
+  message varchar(500) DEFAULT NULL,
+  content varchar(500) DEFAULT NULL,
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_sms_log_task ON rpt_sms_log(task_id);
+CREATE INDEX IF NOT EXISTS idx_sms_log_user ON rpt_sms_log(user_id);
+
+CREATE TABLE IF NOT EXISTS rpt_volume_file (
+  id bigint NOT NULL AUTO_INCREMENT,
+  group_key varchar(128) NOT NULL,
+  volume_index int NOT NULL DEFAULT '0',
+  file_id bigint NOT NULL,
+  task_id bigint DEFAULT NULL,
+  create_by bigint DEFAULT NULL,
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS uk_volume_group_index ON rpt_volume_file(group_key,volume_index);
+CREATE INDEX IF NOT EXISTS idx_volume_task ON rpt_volume_file(task_id);
+
+CREATE TABLE IF NOT EXISTS rpt_statistics_rule (
+  id bigint NOT NULL AUTO_INCREMENT,
+  rule_code varchar(64) NOT NULL,
+  rule_name varchar(128) DEFAULT NULL,
+  grace_days int DEFAULT '0',
+  remind_days int DEFAULT '0',
+  enabled tinyint DEFAULT '1',
+  remark varchar(500) DEFAULT NULL,
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  update_time datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS uk_statistics_rule_code ON rpt_statistics_rule(rule_code);
+
+CREATE TABLE IF NOT EXISTS rpt_template_auth (
+  id bigint NOT NULL AUTO_INCREMENT,
+  template_id bigint NOT NULL,
+  auth_type varchar(16) NOT NULL,
+  target_id bigint NOT NULL,
+  create_by bigint DEFAULT NULL,
+  create_time datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS uk_template_auth ON rpt_template_auth(template_id,auth_type,target_id);
+CREATE INDEX IF NOT EXISTS idx_template_auth_target ON rpt_template_auth(auth_type,target_id);
+
+CREATE TABLE IF NOT EXISTS rpt_online_user (
+  id bigint NOT NULL AUTO_INCREMENT,
+  user_id bigint NOT NULL,
+  username varchar(64) DEFAULT NULL,
+  session_id varchar(64) DEFAULT NULL,
+  ip varchar(64) DEFAULT NULL,
+  user_agent varchar(300) DEFAULT NULL,
+  login_time datetime DEFAULT CURRENT_TIMESTAMP,
+  last_active_time datetime DEFAULT CURRENT_TIMESTAMP,
+  status tinyint DEFAULT '1',
+  offline_reason varchar(200) DEFAULT NULL,
+  offline_time datetime DEFAULT NULL,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_online_user ON rpt_online_user(user_id,status);
+CREATE INDEX IF NOT EXISTS idx_online_session ON rpt_online_user(session_id);
+
+-- 定时任务跨实例互斥锁（ScheduleLockService 使用）
+-- 唯一键 job_name 用于 INSERT 抢占式加锁；locked_at 用于判定崩溃残留锁（默认 30 分钟超时）
+CREATE TABLE IF NOT EXISTS rpt_schedule_lock (
+  job_name  VARCHAR(64) NOT NULL,
+  instance  VARCHAR(128) DEFAULT '',
+  locked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (job_name)
+);

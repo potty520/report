@@ -62,16 +62,32 @@ public class RptTaskService {
     }
 
     /**
-     * 发布任务
+     * 发布任务。
+     *
+     * 并发修复（审计 P0-2）：用条件更新（status 0→1）原子抢占，
+     * 避免并发重复发布或与关闭操作互相覆盖。
      */
     @Transactional
     public void publishTask(Long taskId) {
         RptTask task = rptTaskMapper.selectById(taskId);
         if (task == null) throw new RuntimeException("任务不存在");
-        if (task.getStatus() != 0) throw new RuntimeException("只有草稿状态的任务可以发布");
-        task.setStatus(1); // 已发布
-        task.setUpdateTime(LocalDateTime.now());
-        rptTaskMapper.updateById(task);
+        int claimed = rptTaskMapper.update(null,
+                Wrappers.<RptTask>lambdaUpdate()
+                        .set(RptTask::getStatus, 1)
+                        .set(RptTask::getUpdateTime, LocalDateTime.now())
+                        .eq(RptTask::getId, taskId)
+                        .eq(RptTask::getStatus, 0));
+        if (claimed == 0) {
+            throw new RuntimeException("只有草稿状态的任务可以发布（当前状态已变更，请刷新）");
+        }
+    }
+
+    /**
+     * 关闭任务（语义化别名，内部复用 updateStatus 的状态守卫与原子更新）。
+     */
+    @Transactional
+    public void closeTask(Long taskId) {
+        updateStatus(taskId, 4);
     }
 
     /**
@@ -287,20 +303,33 @@ public class RptTaskService {
     }
 
     /**
-     * 更新任务状态
+     * 更新任务状态。
+     *
+     * 并发修复（审计 P0-2）+ 状态守卫（审计 P1-1）：
+     * 原实现「先查后改」且 case 4（关闭）没有任何守卫，任何状态的任务都能被关闭、
+     * 也能与其它操作互相覆盖。现改为按目标状态构造条件更新，原子生效：
+     *   1 发布：仅 草稿(0) → 已发布(1)
+     *   3 完成：仅 填报中(2) → 已完成(3)，且要求全部 FILL 分派已完成
+     *   4 关闭：仅 已发布(1)/填报中(2) → 已关闭(4)
      */
     @Transactional
     public void updateStatus(Long taskId, Integer status) {
+        if (status == null) throw new RuntimeException("状态不能为空");
         RptTask task = rptTaskMapper.selectById(taskId);
         if (task == null) throw new RuntimeException("任务不存在");
 
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<RptTask> wrapper =
+                Wrappers.<RptTask>lambdaUpdate()
+                        .set(RptTask::getStatus, status)
+                        .set(RptTask::getUpdateTime, LocalDateTime.now())
+                        .eq(RptTask::getId, taskId);
+
         switch (status) {
             case 1: // 发布
-                if (task.getStatus() != 0) throw new RuntimeException("只能发布草稿状态的任务");
+                wrapper.eq(RptTask::getStatus, 0);
                 break;
-            case 3: // 完成
-                if (task.getStatus() != 2) throw new RuntimeException("只能完成填报中的任务");
-                // 检查是否全部填报完成
+            case 3: { // 完成：仅填报中，且全部 FILL 分派已完成
+                wrapper.eq(RptTask::getStatus, 2);
                 Long totalAssign = rptTaskAssignMapper.selectCount(
                         Wrappers.<RptTaskAssign>lambdaQuery()
                                 .eq(RptTaskAssign::getTaskId, taskId)
@@ -310,19 +339,24 @@ public class RptTaskService {
                                 .eq(RptTaskAssign::getTaskId, taskId)
                                 .eq(RptTaskAssign::getAssignType, "FILL")
                                 .eq(RptTaskAssign::getStatus, 1));
-                if (totalAssign > 0 && !doneAssign.equals(totalAssign)) {
-                    throw new RuntimeException("还有" + (totalAssign - doneAssign) + "个填报未完成");
+                long total = totalAssign == null ? 0 : totalAssign;
+                long done = doneAssign == null ? 0 : doneAssign;
+                if (total > 0 && done < total) {
+                    throw new RuntimeException("还有 " + (total - done) + " 个填报未完成");
                 }
                 break;
-            case 4: // 关闭
+            }
+            case 4: // 关闭：只允许已发布/填报中
+                wrapper.in(RptTask::getStatus, 1, 2);
                 break;
             default:
-                break;
+                throw new RuntimeException("不支持的目标状态: " + status);
         }
 
-        task.setStatus(status);
-        task.setUpdateTime(LocalDateTime.now());
-        rptTaskMapper.updateById(task);
+        int claimed = rptTaskMapper.update(null, wrapper);
+        if (claimed == 0) {
+            throw new RuntimeException("任务状态已变更或不满足流转条件（当前状态请刷新后重试）");
+        }
     }
 
     /**
@@ -469,8 +503,19 @@ public class RptTaskService {
                 child.setCreateBy(parent.getCreateBy());
                 child.setCreateTime(now);
                 child.setUpdateTime(now);
-                rptTaskMapper.insert(child);
+                // 并发修复（审计 P0-3）：插入改为「捕获唯一键冲突即跳过」，
+                // 不再单纯依赖前面的 selectCount 预判（并发下预判会失效）。
+                // 依赖唯一约束 uk_periodic(parent_task_id, belong_time, dept_id)。
+                try {
+                    rptTaskMapper.insert(child);
+                } catch (org.springframework.dao.DuplicateKeyException dup) {
+                    // 唯一约束 uk_periodic 生效：另一实例/另一轮已生成，跳过即可
+                    seq++;
+                    continue;
+                }
 
+                // 复制分派：FILL 分派必复制；AUDIT 分派同步复制（原实现只复制了 FILL，
+                // 导致子任务没有审核人，只能靠 fail-open 兜底）
                 for (RptTaskAssign assign : entry.getValue()) {
                     RptTaskAssign copy = new RptTaskAssign();
                     copy.setTaskId(child.getId());
