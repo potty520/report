@@ -58,39 +58,6 @@ public class RptDataApplyService {
         rptDataApplyMapper.insert(apply);
     }
 
-    /** 修改本人待审批申请 */
-    @Transactional
-    public void updatePending(Long id, Long taskId, String reason, Long userId) {
-        RptDataApply apply = rptDataApplyMapper.selectById(id);
-        if (apply == null) throw new RuntimeException("申请不存在");
-        if (apply.getApplicantId() == null || !apply.getApplicantId().equals(userId)) {
-            throw new org.springframework.security.access.AccessDeniedException("只能修改本人的申请");
-        }
-        if (apply.getStatus() == null || apply.getStatus() != 0) {
-            throw new RuntimeException("仅待审批申请允许修改");
-        }
-        if (taskId == null) throw new RuntimeException("任务ID不能为空");
-        if (StrUtil.isBlank(reason)) throw new RuntimeException("申请原因不能为空");
-        if (rptTaskMapper.selectById(taskId) == null) throw new RuntimeException("任务不存在");
-        apply.setTaskId(taskId);
-        apply.setReason(reason.trim());
-        rptDataApplyMapper.updateById(apply);
-    }
-
-    /** 删除本人待审批申请 */
-    @Transactional
-    public void deletePending(Long id, Long userId) {
-        RptDataApply apply = rptDataApplyMapper.selectById(id);
-        if (apply == null) throw new RuntimeException("申请不存在");
-        if (apply.getApplicantId() == null || !apply.getApplicantId().equals(userId)) {
-            throw new org.springframework.security.access.AccessDeniedException("只能删除本人的申请");
-        }
-        if (apply.getStatus() == null || apply.getStatus() != 0) {
-            throw new RuntimeException("仅待审批申请允许删除");
-        }
-        rptDataApplyMapper.deleteById(id);
-    }
-
     /**
      * 获取我的申请列表
      */

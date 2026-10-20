@@ -1179,9 +1179,8 @@ export async function createDataApplyApi(data: DataApplyFormParams) {
 }
 
 export async function updateDataApplyApi(id: number, data: DataApplyFormParams) {
-  return request.put<ApiResponse<null>>(`/dataApply/${id}`, null, {
-    params: { taskId: data.taskId, reason: data.reason },
-  });
+  // 兼容接口只允许修改申请原因，不允许变更 taskId
+  return request.put<ApiResponse<null>>(`/dataApply/${id}`, { reason: data.reason });
 }
 
 export async function deleteDataApplyApi(id: number) {
