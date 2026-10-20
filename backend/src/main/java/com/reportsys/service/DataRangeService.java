@@ -56,6 +56,10 @@ public class DataRangeService {
     private static final java.util.regex.Pattern LIMIT_PATTERN =
             java.util.regex.Pattern.compile("\\blimit\\b");
 
+    /** UNION 判断 */
+    private static final java.util.regex.Pattern UNION_PATTERN =
+            java.util.regex.Pattern.compile("\\bunion\\b");
+
     /** 禁止访问的系统库 / 元数据库 */
     private static final List<String> FORBIDDEN_SCHEMAS = Arrays.asList(
             "information_schema", "performance_schema", "mysql.", "sys.", "pg_catalog", "sqlite_master");
@@ -200,17 +204,26 @@ public class DataRangeService {
         String cleaned = stripComments(sql).trim();
         if (cleaned.isEmpty()) throw new RuntimeException("SQL 不能为空");
 
-        String lower = cleaned.toLowerCase(Locale.ROOT);
-        if (!SELECT_START.matcher(lower).find()) {
+        // 结构校验用「原文」（保留字符串内容用于 SELECT 起始判断）
+        String lowerOriginal = cleaned.toLowerCase(Locale.ROOT);
+        if (!SELECT_START.matcher(lowerOriginal).find()) {
             throw new RuntimeException("只允许执行 SELECT 查询");
         }
+
+        // 关键字 / 敏感表 / 分号校验统一用「掩码版」：
+        // 把 '...' 与 "..." 的内容清空，避免业务里正常的字符串值
+        // （如 remark = 'please delete this' 或 'a;b'）被误判为注入而误杀。
+        // 注意：关键字在字符串<b>外</b>时仍能被检出，安全性不受影响。
+        String masked = maskStringLiterals(cleaned);
+        String lower = masked.toLowerCase(Locale.ROOT);
+
         // 词边界关键字黑名单
         java.util.regex.Matcher m = FORBIDDEN_PATTERN.matcher(lower);
         if (m.find()) {
             throw new RuntimeException("SQL 中包含不允许的关键字: " + m.group());
         }
         // 禁止 union（可拼接任意结果集，绕过单表语义）
-        if (java.util.regex.Pattern.compile("\\bunion\\b").matcher(lower).find()) {
+        if (UNION_PATTERN.matcher(lower).find()) {
             throw new RuntimeException("SQL 中不允许使用 UNION");
         }
         // 禁止系统库 / 元数据探测
@@ -226,11 +239,46 @@ public class DataRangeService {
                 throw new RuntimeException("不允许查询系统敏感表: " + table);
             }
         }
-        // 禁止多语句
-        String withoutTrailing = cleaned.replaceAll(";\\s*$", "");
+        // 禁止多语句（字符串内的分号已被掩码，不会误判）
+        String withoutTrailing = masked.replaceAll(";\\s*$", "");
         if (withoutTrailing.contains(";")) {
             throw new RuntimeException("不允许多条语句（含分号）");
         }
+    }
+
+    /**
+     * 把字符串字面量的内容清空（保留引号边界）。
+     *
+     * 用于安全校验前的归一化：既避免正常字符串值里的关键字被误杀，
+     * 也保证字符串外的真实关键字仍可被检出。
+     * 支持 {@code ''} 与 {@code ""} 的转义写法。
+     */
+    private String maskStringLiterals(String sql) {
+        StringBuilder sb = new StringBuilder(sql.length());
+        char quote = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (quote == 0) {
+                if (c == '\'' || c == '"') {
+                    quote = c;
+                    sb.append(c);
+                } else {
+                    sb.append(c);
+                }
+            } else {
+                if (c == quote) {
+                    // '' / "" 表示转义的单引号/双引号，继续留在字符串内
+                    if (i + 1 < sql.length() && sql.charAt(i + 1) == quote) {
+                        i++;
+                    } else {
+                        quote = 0;
+                        sb.append(c);
+                    }
+                }
+                // 字符串内容丢弃
+            }
+        }
+        return sb.toString();
     }
 
     /** 剥离 SQL 注释：块注释、行注释（-- 与 #），避免用注释拼关键字绕过 */

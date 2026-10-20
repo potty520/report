@@ -98,12 +98,24 @@ public class RptTaskDataService {
                     && existData.getTaskAuditStatus() != null && existData.getTaskAuditStatus() == 1) {
                 throw new RuntimeException("该数据已完成双级审核，不能再修改");
             }
-            // 更新已有数据
-            existData.setDataJson(taskData.getDataJson());
-            existData.setFileUrl(taskData.getFileUrl());
-            existData.setStatus(0); // 草稿
-            existData.setUpdateTime(LocalDateTime.now());
-            rptTaskDataMapper.updateById(existData);
+            // 状态守卫（并发修复）：已提交（status=1）的数据不允许被「保存草稿」无条件打回。
+            // 否则并发下「提交」与「保存」互相踩踏，提交计数与实际提交数不一致，
+            // 也让已提交数据可被静默改回草稿。
+            if (existData.getStatus() != null && existData.getStatus() == 1) {
+                throw new RuntimeException("该数据已提交，不能直接保存草稿；如需修改请等待审核驳回");
+            }
+            // 更新已有数据（条件更新：仅当仍为草稿时生效，防并发覆盖）
+            LocalDateTime now = LocalDateTime.now();
+            int claimed = rptTaskDataMapper.update(null,
+                    Wrappers.<RptTaskData>lambdaUpdate()
+                            .set(RptTaskData::getDataJson, taskData.getDataJson())
+                            .set(RptTaskData::getFileUrl, taskData.getFileUrl())
+                            .set(RptTaskData::getStatus, 0)
+                            .eq(RptTaskData::getId, existData.getId())
+                            .and(w -> w.isNull(RptTaskData::getStatus).or().eq(RptTaskData::getStatus, 0)));
+            if (claimed == 0) {
+                throw new RuntimeException("该数据状态已变更（可能刚被提交或审核），请刷新后重试");
+            }
             taskData.setId(existData.getId());
         } else {
             // 新增填报数据
@@ -131,25 +143,30 @@ public class RptTaskDataService {
         if (taskData.getStatus() != null && taskData.getStatus() == 1) throw new RuntimeException("数据已提交，请勿重复提交");
         if (StrUtil.isBlank(taskData.getDataJson())) throw new RuntimeException("填报数据不能为空");
 
-        taskData.setStatus(1); // 已提交
-        taskData.setSubmitTime(LocalDateTime.now());
-        taskData.setAuditStatus(0); // 待审
-        taskData.setUpdateTime(LocalDateTime.now());
-        rptTaskDataMapper.updateById(taskData);
+        // 并发修复（审计 P0-2）：用「条件更新」原子抢占，替代 check-then-act。
+        // 只在 status 仍为草稿(0) 时更新，影响行数为 0 说明已被并发请求提交过。
+        LocalDateTime now = LocalDateTime.now();
+        int claimed = rptTaskDataMapper.update(null,
+                Wrappers.<RptTaskData>lambdaUpdate()
+                        .set(RptTaskData::getStatus, 1)
+                        .set(RptTaskData::getSubmitTime, now)
+                        .set(RptTaskData::getAuditStatus, 0)
+                        .eq(RptTaskData::getId, dataId)
+                        .and(w -> w.isNull(RptTaskData::getStatus).or().eq(RptTaskData::getStatus, 0)));
+        if (claimed == 0) {
+            throw new RuntimeException("数据已提交或状态已变更，请刷新后重试");
+        }
         // P0-C：记录流转轨迹
         processLog.log(taskData.getTaskId(), dataId, "SUBMIT", "提交填报", "SUBMIT",
                 taskData.getFillUserId(), "提交填报数据");
 
-        // 更新任务分派状态
-        RptTaskAssign assign = rptTaskAssignMapper.selectOne(
-                Wrappers.<RptTaskAssign>lambdaQuery()
+        // 更新任务分派状态（条件更新，避免重复写）
+        rptTaskAssignMapper.update(null,
+                Wrappers.<RptTaskAssign>lambdaUpdate()
+                        .set(RptTaskAssign::getStatus, 1)
                         .eq(RptTaskAssign::getTaskId, taskData.getTaskId())
                         .eq(RptTaskAssign::getUserId, taskData.getFillUserId())
                         .eq(RptTaskAssign::getAssignType, "FILL"));
-        if (assign != null) {
-            assign.setStatus(1); // 已填报
-            rptTaskAssignMapper.updateById(assign);
-        }
     }
 
     /**
@@ -217,29 +234,37 @@ public class RptTaskDataService {
         // 安全加固：禁止自审；有审核分派时必须是被分派人
         authz.assertCanAudit(taskData.getTaskId(), taskData.getFillUserId(), auditUserId);
 
-        taskData.setAuditStatus(auditStatus);
-        taskData.setAuditComment(auditComment);
-        taskData.setAuditUserId(auditUserId);
-        taskData.setAuditTime(LocalDateTime.now());
-        taskData.setUpdateTime(LocalDateTime.now());
-        rptTaskDataMapper.updateById(taskData);
+        // 并发修复（审计 P0-2）：条件更新原子抢占「待审 → 已审」，
+        // 只在 status=1 且 audit_status=0 时生效，避免两人同时审核互相覆盖。
+        LocalDateTime now = LocalDateTime.now();
+        int claimed = rptTaskDataMapper.update(null,
+                Wrappers.<RptTaskData>lambdaUpdate()
+                        .set(RptTaskData::getAuditStatus, auditStatus)
+                        .set(RptTaskData::getAuditComment, auditComment)
+                        .set(RptTaskData::getAuditUserId, auditUserId)
+                        .set(RptTaskData::getAuditTime, now)
+                        .eq(RptTaskData::getId, dataId)
+                        .eq(RptTaskData::getStatus, 1)
+                        .and(w -> w.isNull(RptTaskData::getAuditStatus).or().eq(RptTaskData::getAuditStatus, 0)));
+        if (claimed == 0) {
+            throw new RuntimeException("数据状态已变更（可能已被他人审核），请刷新后重试");
+        }
 
-        // 如果驳回，将提交状态重置
-        if (auditStatus == 2) {
-            taskData.setStatus(0);
-            taskData.setSubmitTime(null);
-            rptTaskDataMapper.updateById(taskData);
-
+        // 如果驳回，将提交状态重置为草稿（同样用条件更新）
+        if (auditStatus != null && auditStatus == 2) {
+            rptTaskDataMapper.update(null,
+                    Wrappers.<RptTaskData>lambdaUpdate()
+                            .set(RptTaskData::getStatus, 0)
+                            .set(RptTaskData::getSubmitTime, null)
+                            .eq(RptTaskData::getId, dataId)
+                            .eq(RptTaskData::getStatus, 1));
             // 重置分派状态
-            RptTaskAssign assign = rptTaskAssignMapper.selectOne(
-                    Wrappers.<RptTaskAssign>lambdaQuery()
+            rptTaskAssignMapper.update(null,
+                    Wrappers.<RptTaskAssign>lambdaUpdate()
+                            .set(RptTaskAssign::getStatus, 0)
                             .eq(RptTaskAssign::getTaskId, taskData.getTaskId())
                             .eq(RptTaskAssign::getUserId, taskData.getFillUserId())
                             .eq(RptTaskAssign::getAssignType, "FILL"));
-            if (assign != null) {
-                assign.setStatus(0);
-                rptTaskAssignMapper.updateById(assign);
-            }
         }
 
         // 更新任务审核状态 (auditStatus为计算字段不存DB，此处做空保护)
@@ -693,19 +718,31 @@ public class RptTaskDataService {
         if (data.getDeptAuditStatus() != null && data.getDeptAuditStatus() != 0) {
             throw new RuntimeException("部门已审核，请勿重复操作");
         }
+        // 并发修复（审计 P0-2）：条件更新原子抢占，避免两人同时审核互相覆盖
         LocalDateTime now = LocalDateTime.now();
-        data.setDeptAuditStatus(pass ? 1 : 2);
-        data.setDeptAuditUserId(auditorId);
-        data.setDeptAuditTime(now);
-        data.setDeptAuditComment(StrUtil.maxLength(StrUtil.nullToEmpty(comment), 500));
-        data.setUpdateTime(now);
+        int claimed = rptTaskDataMapper.update(null,
+                Wrappers.<RptTaskData>lambdaUpdate()
+                        .set(RptTaskData::getDeptAuditStatus, pass ? 1 : 2)
+                        .set(RptTaskData::getDeptAuditUserId, auditorId)
+                        .set(RptTaskData::getDeptAuditTime, now)
+                        .set(RptTaskData::getDeptAuditComment,
+                                StrUtil.maxLength(StrUtil.nullToEmpty(comment), 500))
+                        .eq(RptTaskData::getId, dataId)
+                        .eq(RptTaskData::getStatus, 1)
+                        .and(w -> w.isNull(RptTaskData::getDeptAuditStatus)
+                                .or().eq(RptTaskData::getDeptAuditStatus, 0)));
+        if (claimed == 0) {
+            throw new RuntimeException("数据状态已变更（可能已被他人审核），请刷新后重试");
+        }
         if (!pass) {
             // 部门驳回：退回草稿，允许重新填报
-            data.setStatus(0);
-            data.setSubmitTime(null);
-            data.setAuditStatus(2);
+            rptTaskDataMapper.update(null,
+                    Wrappers.<RptTaskData>lambdaUpdate()
+                            .set(RptTaskData::getStatus, 0)
+                            .set(RptTaskData::getSubmitTime, null)
+                            .set(RptTaskData::getAuditStatus, 2)
+                            .eq(RptTaskData::getId, dataId));
         }
-        rptTaskDataMapper.updateById(data);
         processLog.log(data.getTaskId(), dataId, "DEPT_AUDIT", "部门审核", pass ? "PASS" : "REJECT", auditorId, comment);
     }
 
@@ -725,18 +762,30 @@ public class RptTaskDataService {
         if (data.getTaskAuditStatus() != null && data.getTaskAuditStatus() != 0) {
             throw new RuntimeException("任务方已审核，请勿重复操作");
         }
+        // 并发修复（审计 P0-2）：条件更新原子抢占
         LocalDateTime now = LocalDateTime.now();
-        data.setTaskAuditStatus(pass ? 1 : 2);
-        data.setTaskAuditUserId(auditorId);
-        data.setTaskAuditTime(now);
-        data.setTaskAuditComment(StrUtil.maxLength(StrUtil.nullToEmpty(comment), 500));
-        data.setAuditStatus(pass ? 1 : 2);
-        if (!pass) {
-            data.setStatus(0);
-            data.setSubmitTime(null);
+        int claimed = rptTaskDataMapper.update(null,
+                Wrappers.<RptTaskData>lambdaUpdate()
+                        .set(RptTaskData::getTaskAuditStatus, pass ? 1 : 2)
+                        .set(RptTaskData::getTaskAuditUserId, auditorId)
+                        .set(RptTaskData::getTaskAuditTime, now)
+                        .set(RptTaskData::getTaskAuditComment,
+                                StrUtil.maxLength(StrUtil.nullToEmpty(comment), 500))
+                        .set(RptTaskData::getAuditStatus, pass ? 1 : 2)
+                        .eq(RptTaskData::getId, dataId)
+                        .eq(RptTaskData::getStatus, 1)
+                        .and(w -> w.isNull(RptTaskData::getTaskAuditStatus)
+                                .or().eq(RptTaskData::getTaskAuditStatus, 0)));
+        if (claimed == 0) {
+            throw new RuntimeException("数据状态已变更（可能已被他人审核），请刷新后重试");
         }
-        data.setUpdateTime(now);
-        rptTaskDataMapper.updateById(data);
+        if (!pass) {
+            rptTaskDataMapper.update(null,
+                    Wrappers.<RptTaskData>lambdaUpdate()
+                            .set(RptTaskData::getStatus, 0)
+                            .set(RptTaskData::getSubmitTime, null)
+                            .eq(RptTaskData::getId, dataId));
+        }
         processLog.log(data.getTaskId(), dataId, "TASK_AUDIT", "任务方审核", pass ? "PASS" : "REJECT", auditorId, comment);
     }
 
