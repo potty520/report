@@ -1,16 +1,39 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Form, Input, Button, message, App } from 'antd';
+import { Card, Form, Input, Button, App } from 'antd';
 import { LockOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { changePasswordApi } from '@/services/api';
-import JSEncrypt from 'jsencrypt';
+import { useAuthStore } from '@/stores/useAuthStore';
 
-const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCDEje+xU53iVN4wPqIcBB+42s1
-L6VxN7H6DZG1e5UY0w6V0tNxJ2pN08kXTTUQTvIfx0NlF5EUJ8kPTVxYViHx0IHP
-lcM09W0RQ8jYPqULm5fT4JLXZwNjYJHyGpMNUyJwURUwCFLNqGP5yBGEkTyjhrX2
-s6AlKqkS8KVdXhOwIDAQAB
------END PUBLIC KEY-----`;
+/**
+ * 后端密码策略（com.reportsys.common.PasswordPolicy）的前端镜像：
+ * 长度 8~64、至少 2 类字符、不能纯数字、不能是常见弱口令。
+ * 前端只做前置提示，最终以后端返回为准。
+ */
+const MIN_LENGTH = 8;
+const MAX_LENGTH = 64;
+const WEAK_PASSWORDS = new Set([
+  '123456', '1234567', '12345678', '123456789', '1234567890',
+  '111111', '11111111', '000000', '00000000', '888888', '88888888',
+  '666666', '999999', '123123', '123321', '654321', 'abcdef',
+  'abc123', 'abc123456', 'a123456', 'a12345678', 'qwerty', 'qwerty123',
+  'qwertyuiop', 'password', 'password1', 'password123', 'passw0rd',
+  'admin', '***REMOVED_DEFAULT_ADMIN_PASSWORD***', 'admin888', 'root', 'root123', 'system',
+  'iloveyou', 'welcome', 'letmein', 'monkey', 'dragon', 'master',
+  'superman', 'sunshine', 'princess', 'football', 'baseball',
+]);
+
+/** 返回 null 表示通过，否则返回可直接展示的错误文案 */
+function checkPasswordStrength(password: string): string | null {
+  if (!password) return '请输入新密码';
+  if (password.length < MIN_LENGTH) return `密码长度不能少于 ${MIN_LENGTH} 位`;
+  if (password.length > MAX_LENGTH) return `密码长度不能超过 ${MAX_LENGTH} 位`;
+  if (WEAK_PASSWORDS.has(password.toLowerCase())) return '密码过于简单，请勿使用常见弱口令';
+  const categories = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((r) => r.test(password)).length;
+  if (categories < 2) return '密码需包含大写字母、小写字母、数字、符号中的至少两类';
+  if (/^\d+$/.test(password)) return '密码不能为纯数字';
+  return null;
+}
 
 const UserCenterPage: React.FC = () => {
   const { message: msg } = App.useApp();
@@ -23,31 +46,29 @@ const UserCenterPage: React.FC = () => {
       msg.error('两次输入的新密码不一致');
       return;
     }
-    if (values.newPassword.length < 6) {
-      msg.error('密码长度不能少于6位');
+    const pwdError = checkPasswordStrength(values.newPassword);
+    if (pwdError) {
+      msg.error(pwdError);
       return;
     }
     try {
       setLoading(true);
-      const encrypt = new JSEncrypt();
-      encrypt.setPublicKey(PUBLIC_KEY);
-      const encryptedOld = encrypt.encrypt(values.oldPassword);
-      const encryptedNew = encrypt.encrypt(values.newPassword);
-      if (!encryptedOld || !encryptedNew) {
-        msg.error('密码加密失败');
-        return;
-      }
+      // 后端 AuthController.updatePassword 用 @RequestParam 接收明文并直接 BCrypt 比对，
+      // 没有 RSA 私钥/解密逻辑，因此这里必须传明文（PUT /auth/password，query 参数）。
       await changePasswordApi({
-        oldPassword: encryptedOld,
-        newPassword: encryptedNew,
-        confirmPassword: encryptedNew,
+        oldPassword: values.oldPassword,
+        newPassword: values.newPassword,
       });
       msg.success('密码修改成功，请重新登录');
-      // Logout and go to login
-      localStorage.clear();
+      // 清理登录态（logout 内部 finally 一定会 clearAuth，注销接口失败不阻塞跳转）
+      try {
+        await useAuthStore.getState().logout();
+      } catch {
+        /* 注销接口失败忽略：本地登录态已由 logout 的 finally 清理 */
+      }
       navigate('/login', { replace: true });
     } catch (error: any) {
-      msg.error(error?.response?.data?.msg || '密码修改失败');
+      msg.error(error?.response?.data?.msg || error?.message || '密码修改失败');
     } finally {
       setLoading(false);
     }
@@ -80,12 +101,17 @@ const UserCenterPage: React.FC = () => {
             label="新密码"
             rules={[
               { required: true, message: '请输入新密码' },
-              { min: 6, message: '密码长度不能少于6位' },
+              {
+                validator(_, value) {
+                  const error = checkPasswordStrength(value);
+                  return error ? Promise.reject(new Error(error)) : Promise.resolve();
+                },
+              },
             ]}
           >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder="请输入新密码(至少6位)"
+              placeholder="至少8位，需包含大小写字母/数字/符号中的至少两类"
               size="large"
             />
           </Form.Item>

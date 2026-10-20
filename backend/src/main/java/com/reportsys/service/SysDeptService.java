@@ -7,7 +7,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import com.reportsys.common.PageResult;
 import com.reportsys.dao.SysDeptMapper;
+import com.reportsys.dao.SysProjectMapper;
+import com.reportsys.dao.SysUserMapper;
+import com.reportsys.dao.RptTaskMapper;
+import com.reportsys.dao.RptTemplateMapper;
 import com.reportsys.model.SysDept;
+import com.reportsys.model.SysProject;
+import com.reportsys.model.SysUser;
+import com.reportsys.model.RptTask;
+import com.reportsys.model.RptTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +29,14 @@ public class SysDeptService {
 
     @Autowired
     private SysDeptMapper sysDeptMapper;
+    @Autowired
+    private SysUserMapper sysUserMapper;
+    @Autowired
+    private SysProjectMapper sysProjectMapper;
+    @Autowired
+    private RptTaskMapper rptTaskMapper;
+    @Autowired
+    private RptTemplateMapper rptTemplateMapper;
 
     /**
      * 获取部门树
@@ -113,12 +129,45 @@ public class SysDeptService {
         sysDeptMapper.updateById(dept);
     }
 
+    /**
+     * 删除部门。
+     *
+     * 一致性修复（审计：严重级）：原实现只检查子部门，<b>不检查用户/项目/任务/模板</b>，
+     * 删除后 sys_user.dept_id、sys_project.dept_id、rpt_task.dept_id、rpt_template.dept_id、
+     * rpt_task_assign.dept_id、rpt_task_data.dept_id 全部悬空。
+     * 现在把这些下游引用一并检查。
+     */
     @Transactional
     public void deleteById(Long id) {
         // 检查是否有子部门
         Long count = sysDeptMapper.selectCount(
                 Wrappers.<SysDept>lambdaQuery().eq(SysDept::getParentId, id));
         if (count > 0) throw new RuntimeException("该部门下存在子部门，无法删除");
+
+        Long userCount = sysUserMapper.selectCount(
+                Wrappers.<SysUser>lambdaQuery().eq(SysUser::getDeptId, id));
+        if (userCount != null && userCount > 0) {
+            throw new RuntimeException("该部门下存在 " + userCount + " 个用户，无法删除，请先调整用户所属部门");
+        }
+
+        Long projectCount = sysProjectMapper.selectCount(
+                Wrappers.<SysProject>lambdaQuery().eq(SysProject::getDeptId, id));
+        if (projectCount != null && projectCount > 0) {
+            throw new RuntimeException("该部门下存在 " + projectCount + " 个项目，无法删除");
+        }
+
+        Long taskCount = rptTaskMapper.selectCount(
+                Wrappers.<RptTask>lambdaQuery().eq(RptTask::getDeptId, id));
+        if (taskCount != null && taskCount > 0) {
+            throw new RuntimeException("该部门下存在 " + taskCount + " 个任务，无法删除");
+        }
+
+        Long templateCount = rptTemplateMapper.selectCount(
+                Wrappers.<RptTemplate>lambdaQuery().eq(RptTemplate::getDeptId, id));
+        if (templateCount != null && templateCount > 0) {
+            throw new RuntimeException("该部门下存在 " + templateCount + " 个模板，无法删除");
+        }
+
         sysDeptMapper.deleteById(id);
     }
 

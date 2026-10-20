@@ -102,17 +102,13 @@ public class OperLogAspect {
         return auth == null ? "" : StrUtil.nullToEmpty(String.valueOf(auth.getPrincipal()));
     }
 
+    /** 安全修复：统一走 IpUtils，避免客户端伪造 X-Forwarded-For 污染审计日志 */
     private String currentIp() {
         try {
             ServletRequestAttributes attributes =
                     (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes == null) return "";
-            HttpServletRequest request = attributes.getRequest();
-            String xff = request.getHeader("X-Forwarded-For");
-            if (StrUtil.isNotBlank(xff) && !"unknown".equalsIgnoreCase(xff)) return xff.split(",")[0].trim();
-            String real = request.getHeader("X-Real-IP");
-            if (StrUtil.isNotBlank(real) && !"unknown".equalsIgnoreCase(real)) return real;
-            return request.getRemoteAddr();
+            return com.reportsys.common.IpUtils.clientIp(attributes.getRequest());
         } catch (Exception e) {
             return "";
         }

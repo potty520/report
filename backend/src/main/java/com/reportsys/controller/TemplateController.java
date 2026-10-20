@@ -190,8 +190,14 @@ public class TemplateController {
     }
 
     /**
-     * 获取模板字段列表
+     * 获取模板字段列表（只读）。
+     *
+     * 安全修复/功能修复：类级 {@code @PreAuthorize} 只允许 SUPER_ADMIN/DEPT_ADMIN，
+     * 导致 FILL_USER 填报时取不到表单字段（前端只能降级成手工输入）。
+     * 字段定义本身是「表单结构」，不含业务数据，允许所有已登录填报/审核角色读取是合理的；
+     * 但写接口（saveFields）仍保持仅超管。
      */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','FILL_USER','AUDIT_USER')")
     @GetMapping("/{id}/fields")
     public Result<List<RptTemplateField>> getFields(@PathVariable Long id) {
         try {

@@ -25,6 +25,10 @@ public class SysProjectService {
     private SysProjectMapper sysProjectMapper;
     @Autowired
     private SysDeptMapper sysDeptMapper;
+    @Autowired
+    private com.reportsys.dao.RptTaskMapper rptTaskMapper;
+    @Autowired
+    private com.reportsys.dao.RptTemplateMapper rptTemplateMapper;
 
     /**
      * 获取项目树(按部门分组)
@@ -95,8 +99,31 @@ public class SysProjectService {
         sysProjectMapper.updateById(project);
     }
 
+    /**
+     * 删除项目。
+     *
+     * 一致性修复（审计：高）：原实现直接物理删除，不检查子项目、
+     * rpt_task.project_id、rpt_template.project_id 引用。
+     */
     @Transactional
     public void deleteById(Long id) {
+        Long childCount = sysProjectMapper.selectCount(
+                Wrappers.<SysProject>lambdaQuery().eq(SysProject::getParentId, id));
+        if (childCount != null && childCount > 0) {
+            throw new RuntimeException("该项目下存在 " + childCount + " 个子项目，无法删除");
+        }
+        Long taskCount = rptTaskMapper.selectCount(
+                Wrappers.<com.reportsys.model.RptTask>lambdaQuery()
+                        .eq(com.reportsys.model.RptTask::getProjectId, id));
+        if (taskCount != null && taskCount > 0) {
+            throw new RuntimeException("该项目下存在 " + taskCount + " 个任务，无法删除");
+        }
+        Long tplCount = rptTemplateMapper.selectCount(
+                Wrappers.<com.reportsys.model.RptTemplate>lambdaQuery()
+                        .eq(com.reportsys.model.RptTemplate::getProjectId, id));
+        if (tplCount != null && tplCount > 0) {
+            throw new RuntimeException("该项目下存在 " + tplCount + " 个模板，无法删除");
+        }
         sysProjectMapper.deleteById(id);
     }
 

@@ -3,6 +3,7 @@ package com.reportsys.service;
 import cn.hutool.http.useragent.UserAgent;
 import cn.hutool.http.useragent.UserAgentUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.reportsys.common.PageResult;
@@ -34,6 +35,10 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     @Resource private JwtTokenUtil jwtTokenUtil;
     @Resource private CaptchaStore captchaStore;
     @Resource private LoginAttemptLimiter loginAttemptLimiter;
+    @Resource private RptTaskMapper rptTaskMapper;
+    @Resource private RptTaskDataMapper rptTaskDataMapper;
+    @Resource private RptTaskAssignMapper rptTaskAssignMapper;
+    @Resource private RptDataApplyMapper rptDataApplyMapper;
 
     public Result<Map<String, Object>> login(String username, String password, String uuid, String captcha, HttpServletRequest request) {
         // 真实校验验证码：由 CaptchaStore 统一存取（原实现分两套存储且未命中即放行）
@@ -123,13 +128,9 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
         return ip;
     }
 
-    /** 取真实客户端 IP（nginx 反代后 remoteAddr 是 127.0.0.1） */
+    /** 取真实客户端 IP（安全修复：统一走 IpUtils，仅信任受信代理写入的转发头） */
     private String clientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isEmpty() && !"unknown".equalsIgnoreCase(xff)) return xff.split(",")[0].trim();
-        String real = request.getHeader("X-Real-IP");
-        if (real != null && !real.isEmpty() && !"unknown".equalsIgnoreCase(real)) return real;
-        return request.getRemoteAddr();
+        return com.reportsys.common.IpUtils.clientIp(request);
     }
 
     private String getLocationByIp(String ip) {
@@ -207,7 +208,42 @@ public class SysUserService extends ServiceImpl<SysUserMapper, SysUser> {
     // Controller compatibility aliases
     public void add(SysUser user) { addUser(user); }
     public void update(SysUser user) { updateUser(user); }
-    public void deleteById(Long id) { userMapper.deleteById(id); }
+
+    /**
+     * 删除用户。
+     *
+     * 一致性修复（审计：严重级）：原实现直接物理删除，<b>不检查任何下游引用</b>，
+     * 删除后 sys_user_role、rpt_task.create_by、rpt_task_data.fill_user_id、
+     * rpt_task_assign.user_id、rpt_data_apply.applicant_id 全部悬空；
+     * 尤其删掉 admin 后 currentUserId() 拿到的 id 在 sys_user 里查不到，全站信息显示为空。
+     *
+     * 处理策略：有业务数据引用的用户不允许物理删除（改为停用），避免数据链断裂。
+     */
+    @Transactional
+    public void deleteById(Long id) {
+        SysUser user = userMapper.selectById(id);
+        if (user == null) throw new RuntimeException("用户不存在");
+        // 禁止删除最后一个超管
+        if ("admin".equalsIgnoreCase(user.getUsername())) {
+            throw new RuntimeException("内置管理员账号不允许删除");
+        }
+        Long taskCount = rptTaskMapper.selectCount(
+                Wrappers.<RptTask>lambdaQuery().eq(RptTask::getCreateBy, id));
+        Long dataCount = rptTaskDataMapper.selectCount(
+                Wrappers.<RptTaskData>lambdaQuery().eq(RptTaskData::getFillUserId, id));
+        Long assignCount = rptTaskAssignMapper.selectCount(
+                Wrappers.<RptTaskAssign>lambdaQuery().eq(RptTaskAssign::getUserId, id));
+        long refs = (taskCount == null ? 0 : taskCount)
+                + (dataCount == null ? 0 : dataCount)
+                + (assignCount == null ? 0 : assignCount);
+        if (refs > 0) {
+            throw new RuntimeException("该用户已有 " + refs
+                    + " 条业务数据关联（任务/填报/分派），不能删除，请改为「停用」");
+        }
+        // 清理角色关联后再删
+        sysUserRoleMapper.deleteByUserId(id);
+        userMapper.deleteById(id);
+    }
     public void updateStatus(Long id, Integer status) { SysUser u = userMapper.selectById(id); if (u != null) { u.setStatus(status); userMapper.updateById(u); } }
     public PageResult<SysUser> listPage(int pageNum, int pageSize, String username, Long deptId, Integer status) {
         Page<SysUser> page = new Page<>(pageNum, pageSize);

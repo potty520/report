@@ -674,6 +674,6 @@ private String describe(ProceedingJoinPoint jp) {
 ## 8. 总体结论
 
 - **整体安全评级：C（不合格）**。认证（JWT）与大部分"角色级"鉴权已经做得不错，但**数据归属层（水平越权）是系统性缺失**：Controller 里几乎没有任何一处校验"这条数据是不是我的"，服务层的 `AuthzService` 又被"无分派即放行"的老逻辑兜底，等于没有兜底。
-- **最危险的组合**：任意基层填报员 → `GET /fill/export?taskId=N` 批量导出 → 直接带走全公司业务数据；再配合 CORS 通配，若存在前端 XSS 即可从外部站点完成整套操作。
+  - **最危险的组合**：任意基层填报员 → `GET /fill/export?taskId=N` 批量导出 → 直接带走全公司业务数据；再配合 CORS 通配，若存在前端 XSS 即可从外部站点完成整套操作。
 - **建议整改顺序**：先修 S1/S2/H1/H2（1~2 天），再修 H3~H6（3~5 天），最后处理 M/L 类加固。修完后建议对 `/fill`、`/audit`、`/dataApply`、`/file`、`/dataRange` 五组接口做一次**越权回归测试**（双账号、跨部门、跨任务各测一遍）。
 - 本报告只做只读审计，未改动任何业务代码；报告文件本身位于 `backend/SECURITY_AUDIT_REPORT.md`。

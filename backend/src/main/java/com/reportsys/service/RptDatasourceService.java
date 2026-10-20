@@ -39,6 +39,10 @@ public class RptDatasourceService {
     private RptDatasourceMapper rptDatasourceMapper;
     @Autowired
     private SecretCrypto secretCrypto;
+    @Autowired
+    private com.reportsys.dao.RptTemplateMapper rptTemplateMapper;
+    @Autowired
+    private com.reportsys.dao.RptDataRangeConfigMapper rptDataRangeConfigMapper;
 
     /** 允许做连接测试的主机白名单，逗号分隔；留空表示不限制（仅建议测试环境） */
     @Value("${report.datasource.test.allowed-hosts:}")
@@ -91,8 +95,26 @@ public class RptDatasourceService {
         rptDatasourceMapper.updateById(ds);
     }
 
+    /**
+     * 删除数据源。
+     *
+     * 一致性修复（审计：高）：原实现直接物理删除，不检查 rpt_template.datasource_id
+     * 与 rpt_data_range_config.datasource_id 引用，删除后模板无法物化入库、数据范围配置无法预览。
+     */
     @Transactional
     public void deleteById(Long id) {
+        Long tplCount = rptTemplateMapper.selectCount(
+                Wrappers.<com.reportsys.model.RptTemplate>lambdaQuery()
+                        .eq(com.reportsys.model.RptTemplate::getDatasourceId, id));
+        if (tplCount != null && tplCount > 0) {
+            throw new RuntimeException("该数据源被 " + tplCount + " 个模板引用，无法删除");
+        }
+        Long rangeCount = rptDataRangeConfigMapper.selectCount(
+                Wrappers.<com.reportsys.model.RptDataRangeConfig>lambdaQuery()
+                        .eq(com.reportsys.model.RptDataRangeConfig::getDatasourceId, id));
+        if (rangeCount != null && rangeCount > 0) {
+            throw new RuntimeException("该数据源被 " + rangeCount + " 个数据范围配置引用，无法删除");
+        }
         rptDatasourceMapper.deleteById(id);
     }
 

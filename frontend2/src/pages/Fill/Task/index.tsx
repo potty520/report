@@ -1,21 +1,69 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Button, Space, Tag, Modal, Form, Input, Upload, message, App,
+  Table, Button, Space, Tag, Modal, Form, Input, Upload, Alert, Typography, message, App,
 } from 'antd';
-import { UploadOutlined, EditOutlined, SendOutlined } from '@ant-design/icons';
+import {
+  UploadOutlined, EditOutlined, SendOutlined, PaperClipOutlined, PlusOutlined, DeleteOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useFillStore } from '@/stores/useFillStore';
-import type { FillTaskItem, FillDataForm } from '@/services/api';
+import { getTemplateFieldsApi, uploadFillFileApi } from '@/services/api';
+import type { FillTaskItem, TemplateField } from '@/services/api';
 import dayjs from 'dayjs';
+
+/**
+ * 解析后端 dataJson（可能是单个对象，也可能是 Excel 导入产生的对象数组）。
+ * 取第一条用于表单回填，避免数组场景直接把表单值写成数组。
+ */
+function firstFillRecord(dataJson?: string): Record<string, any> {
+  if (!dataJson) return {};
+  try {
+    const parsed = JSON.parse(dataJson);
+    if (Array.isArray(parsed)) {
+      return parsed[0] && typeof parsed[0] === 'object' ? parsed[0] : {};
+    }
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** 用模板字段把后端 dataJson 映射成表单初始值（兼容 fieldCode / fieldName 两种 key） */
+function buildFormValues(fields: TemplateField[], data: Record<string, any>): Record<string, any> {
+  const values: Record<string, any> = {};
+  fields.forEach((f) => {
+    const key = f.fieldName;
+    if (!key) return;
+    const raw = data[f.fieldCode || ''] ?? data[key] ?? data[f.fieldLabel || ''] ?? '';
+    values[key] = raw === null || raw === undefined ? '' : String(raw);
+  });
+  return values;
+}
+
+interface ManualRow {
+  key: string;
+  value: string;
+}
 
 const FillTaskPage: React.FC = () => {
   const { message: msg } = App.useApp();
-  const { taskList, taskTotal, taskLoading, currentFillData, fetchTaskList, fetchFillDetail, submitFill, saveDraft } = useFillStore();
+  const { taskList, taskTotal, taskLoading, fetchTaskList, fetchFillDetail, submitFill, saveDraft } = useFillStore();
 
   const [fillModalOpen, setFillModalOpen] = useState(false);
-  const [currentAssignId, setCurrentAssignId] = useState<number | null>(null);
+  const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<number>(0);
+  const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
+  const [fieldsLoading, setFieldsLoading] = useState(false);
+  // 填报人角色没有 /template/{id}/fields 权限（403），退化为「字段名-值」手工录入
+  const [manualMode, setManualMode] = useState(false);
+  const [manualRows, setManualRows] = useState<ManualRow[]>([]);
+  const [fileUrl, setFileUrl] = useState<string | undefined>(undefined);
+  const [fileName, setFileName] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
   const [fillForm] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+
+  const readOnly = currentStatus === 1;
 
   const doFetch = useCallback(() => {
     fetchTaskList({ current: 1, size: 10 });
@@ -25,26 +73,112 @@ const FillTaskPage: React.FC = () => {
     doFetch();
   }, [doFetch]);
 
+  const patchManualRow = (index: number, patch: Partial<ManualRow>) => {
+    setManualRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
   const handleFill = async (record: FillTaskItem) => {
-    setCurrentAssignId(record.assignId);
+    // 后端 RptTaskData 没有分配记录主键字段，任务标识只能用 taskId
+    if (!record.taskId) {
+      msg.error('该填报记录缺少任务ID，无法打开填报页');
+      return;
+    }
+    setCurrentTaskId(record.taskId);
+    setCurrentStatus(record.status ?? 0);
+    setFileUrl(record.fileUrl);
+    setFileName(record.fileName || '');
+    setTemplateFields([]);
+    setManualRows([]);
+    setManualMode(false);
+    fillForm.resetFields();
+    setFillModalOpen(true);
+    setFieldsLoading(true);
     try {
-      await fetchFillDetail(record.assignId);
-      setFillModalOpen(true);
-    } catch {
-      msg.error('获取填报详情失败');
+      // 详情接口：GET /fill/task/{taskId}
+      const detail = await fetchFillDetail(record.taskId);
+      setCurrentStatus(detail?.status ?? record.status ?? 0);
+      setFileUrl(detail?.fileUrl ?? record.fileUrl);
+      setFileName(detail?.fileName || record.fileName || '');
+      const initial = firstFillRecord(detail?.dataJson ?? record.dataJson);
+      const templateId = detail?.templateId ?? record.templateId;
+      if (!templateId) {
+        setManualMode(true);
+        setManualRows(Object.entries(initial).map(([key, value]) => ({ key, value: value == null ? '' : String(value) })));
+        msg.warning('该任务未关联模板，请按已知字段名手工填写');
+        return;
+      }
+      try {
+        const res = await getTemplateFieldsApi(templateId);
+        const list = (res.data.data || []) as TemplateField[];
+        if (list.length === 0) {
+          setManualMode(true);
+          setManualRows(Object.entries(initial).map(([key, value]) => ({ key, value: value == null ? '' : String(value) })));
+        } else {
+          setTemplateFields(list);
+          fillForm.setFieldsValue(buildFormValues(list, initial));
+        }
+      } catch {
+        // 纯填报人访问模板字段接口会 403（该接口仅超管/部门管理员可读）。
+        // 这里不阻断填报，退化为按字段名手工录入，提交格式与后端一致。
+        setManualMode(true);
+        setManualRows(Object.entries(initial).map(([key, value]) => ({ key, value: value == null ? '' : String(value) })));
+      }
+    } catch (error: any) {
+      msg.error(error?.response?.data?.msg || error?.message || '获取填报详情失败');
+      setFillModalOpen(false);
+    } finally {
+      setFieldsLoading(false);
+    }
+  };
+
+  /** 上传填报附件：POST /fill/upload，成功后把 fileUrl 随提交一起发给后端 */
+  const handleUploadFile = async (file: File) => {
+    if (!currentTaskId) return;
+    try {
+      setUploading(true);
+      const res = await uploadFillFileApi(file, currentTaskId);
+      const data = res.data.data;
+      setFileUrl(data?.fileUrl);
+      setFileName(data?.fileName || file.name);
+      msg.success('附件上传成功');
+    } catch (error: any) {
+      msg.error(error?.response?.data?.msg || error?.message || '附件上传失败');
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleFillModalOk = async (type: 'draft' | 'submit') => {
-    if (!currentAssignId) return;
+    if (!currentTaskId) return;
     try {
-      const values = await fillForm.validateFields();
-      const data: FillDataForm = {
-        assignId: currentAssignId,
-        fields: Object.entries(values).map(([fieldName, fieldValue]) => ({
-          fieldName,
-          fieldValue: String(fieldValue || ''),
-        })),
+      // dataJson 的 key 与后端解析口径一致：模板字段用 fieldCode（缺省用 fieldName）
+      const payload: Record<string, string> = {};
+      if (manualMode) {
+        manualRows.forEach((row) => {
+          const key = row.key.trim();
+          if (key) payload[key] = row.value ?? '';
+        });
+        if (Object.keys(payload).length === 0) {
+          msg.error('请至少填写一个字段');
+          return;
+        }
+      } else {
+        const values = await fillForm.validateFields();
+        templateFields.forEach((f) => {
+          const key = f.fieldCode || f.fieldName;
+          if (!key) return;
+          const raw = values[f.fieldName];
+          payload[key] = raw === undefined || raw === null ? '' : String(raw);
+        });
+        if (Object.keys(payload).length === 0) {
+          msg.error('该任务没有可填写的模板字段');
+          return;
+        }
+      }
+      const data = {
+        taskId: currentTaskId,
+        dataJson: JSON.stringify(payload),
+        fileUrl: fileUrl || undefined,
       };
       setSubmitting(true);
       if (type === 'draft') {
@@ -57,56 +191,45 @@ const FillTaskPage: React.FC = () => {
       }
       doFetch();
     } catch (error: any) {
-      if (error.errorFields) return;
-      msg.error('操作失败');
+      if (error?.errorFields) return;
+      msg.error(error?.response?.data?.msg || error?.message || '操作失败');
     } finally {
       setSubmitting(false);
     }
   };
 
   const statusMap: Record<number, { color: string; text: string }> = {
-    0: { color: 'default', text: '未填报' },
-    1: { color: 'processing', text: '已填报' },
-    2: { color: 'green', text: '已提交' },
+    0: { color: 'default', text: '草稿' },
+    1: { color: 'green', text: '已提交' },
   };
 
   const columns: ColumnsType<FillTaskItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
-    { title: '任务名称', dataIndex: 'taskName', width: 200 },
-    { title: '模板', dataIndex: 'templateName', width: 150 },
+    { title: '任务名称', dataIndex: 'taskName', width: 200, render: (v: string) => v || '-' },
+    { title: '模板', dataIndex: 'templateName', width: 150, render: (v: string) => v || '-' },
     {
-      title: '状态', dataIndex: 'status', width: 80, align: 'center',
-      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text}</Tag>,
+      title: '状态', dataIndex: 'status', width: 90, align: 'center',
+      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || '-'}</Tag>,
     },
     {
-      title: '开始日期', dataIndex: 'startDate', width: 120,
-      render: (v: string) => v || '-',
+      title: '填报时间', dataIndex: 'createTime', width: 170,
+      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '截止日期', dataIndex: 'endDate', width: 120,
-      render: (v: string) => v || '-',
+      title: '提交时间', dataIndex: 'submitTime', width: 170,
+      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '分派时间', dataIndex: 'assignTime', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: '操作', key: 'action', width: 200, fixed: 'right',
+      title: '操作', key: 'action', width: 140, fixed: 'right',
       render: (_: any, record: FillTaskItem) => (
         <Space>
-          {record.status === 0 && (
-            <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => handleFill(record)}>
-              填报
-            </Button>
-          )}
-          {record.status === 1 && (
-            <Button type="primary" size="small" icon={<SendOutlined />} onClick={() => handleFill(record)}>
-              提交
-            </Button>
-          )}
-          {record.status === 2 && (
+          {record.status === 1 ? (
             <Button size="small" icon={<EditOutlined />} onClick={() => handleFill(record)}>
               查看
+            </Button>
+          ) : (
+            <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => handleFill(record)}>
+              填报
             </Button>
           )}
         </Space>
@@ -135,11 +258,14 @@ const FillTaskPage: React.FC = () => {
       />
 
       <Modal
-        title="数据填报"
+        title={readOnly ? '查看填报数据' : '数据填报'}
         open={fillModalOpen}
         onCancel={() => setFillModalOpen(false)}
         width={700}
-        footer={[
+        confirmLoading={submitting}
+        footer={readOnly ? [
+          <Button key="close" onClick={() => setFillModalOpen(false)}>关闭</Button>,
+        ] : [
           <Button key="draft" onClick={() => handleFillModalOk('draft')} loading={submitting}>保存草稿</Button>,
           <Button key="submit" type="primary" onClick={() => handleFillModalOk('submit')} loading={submitting} icon={<SendOutlined />}>
             提交数据
@@ -147,28 +273,106 @@ const FillTaskPage: React.FC = () => {
         ]}
         destroyOnClose
       >
-        <div style={{ marginBottom: 16 }}>
-          <Upload accept=".xlsx,.xls" maxCount={1}>
-            <Button icon={<UploadOutlined />}>上传Excel填报</Button>
-          </Upload>
-          <span style={{ marginLeft: 12, color: '#999', fontSize: 13 }}>也可直接在下表中填写</span>
-        </div>
-        <Form form={fillForm} layout="vertical">
-          {currentFillData?.fields?.map((field) => (
-            <Form.Item
-              key={field.fieldName}
-              name={field.fieldName}
-              label={`${field.fieldName}`}
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {!readOnly && (
+            <Upload
+              accept=".xlsx,.xls,.pdf,.doc,.docx,.png,.jpg"
+              maxCount={1}
+              showUploadList={false}
+              beforeUpload={(file) => {
+                handleUploadFile(file as unknown as File);
+                return false;
+              }}
             >
-              <Input placeholder={`请输入${field.fieldName}`} />
-            </Form.Item>
-          ))}
-          {(!currentFillData?.fields || currentFillData.fields.length === 0) && (
-            <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-              暂无填报字段，请先上传Excel或联系管理员配置模板字段
-            </div>
+              <Button icon={<UploadOutlined />} loading={uploading}>上传附件</Button>
+            </Upload>
           )}
-        </Form>
+          {fileName ? (
+            <Typography.Text type="secondary">
+              <PaperClipOutlined /> {fileName}
+            </Typography.Text>
+          ) : (
+            <Typography.Text type="secondary">可选：上传附件（Excel/PDF 等）</Typography.Text>
+          )}
+          {!readOnly && fileUrl && (
+            <Button type="link" size="small" onClick={() => { setFileUrl(undefined); setFileName(''); }}>
+              移除附件
+            </Button>
+          )}
+        </div>
+
+        {manualMode && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="未读取到模板字段定义，请按模板的字段名（或其字段编码）逐项填写"
+          />
+        )}
+
+        {manualMode ? (
+          <div>
+            {manualRows.map((row, index) => (
+              <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <Input
+                  placeholder="字段名 / 字段编码"
+                  value={row.key}
+                  disabled={readOnly}
+                  onChange={(e) => patchManualRow(index, { key: e.target.value })}
+                  style={{ width: 220 }}
+                />
+                <Input
+                  placeholder="字段值"
+                  value={row.value}
+                  disabled={readOnly}
+                  onChange={(e) => patchManualRow(index, { value: e.target.value })}
+                />
+                {!readOnly && (
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => setManualRows((prev) => prev.filter((_, i) => i !== index))}
+                  />
+                )}
+              </div>
+            ))}
+            {!readOnly && (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => setManualRows((prev) => [...prev, { key: '', value: '' }])}
+                block
+              >
+                添加字段
+              </Button>
+            )}
+            {!readOnly && manualRows.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+                暂无填报字段，点「添加字段」按模板字段名录入
+              </div>
+            )}
+          </div>
+        ) : (
+          <Form form={fillForm} layout="vertical" disabled={readOnly}>
+            {templateFields.map((field) => (
+              <Form.Item
+                key={field.fieldName}
+                name={field.fieldName}
+                label={field.fieldLabel || field.fieldName}
+                rules={(field.required === 1 || field.isRequired === 1)
+                  ? [{ required: true, message: `请填写${field.fieldLabel || field.fieldName}` }]
+                  : undefined}
+              >
+                <Input placeholder={`请输入${field.fieldLabel || field.fieldName}`} />
+              </Form.Item>
+            ))}
+            {!fieldsLoading && templateFields.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                暂无填报字段，请联系管理员检查任务关联的模板字段
+              </div>
+            )}
+          </Form>
+        )}
       </Modal>
     </div>
   );
