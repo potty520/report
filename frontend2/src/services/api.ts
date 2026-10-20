@@ -373,6 +373,8 @@ export interface FillTaskItem {
   deptName?: string;
   status: number; // 0=草稿(未提交) 1=已提交
   auditStatus?: number;
+  deptAuditStatus?: number;
+  taskAuditStatus?: number;
   dataJson?: string;
   fileUrl?: string;
   fileName?: string;
@@ -422,21 +424,24 @@ export interface AuditFormParams {
 // ==================== Data Apply ====================
 export interface DataApplyItem {
   id: number;
-  title: string;
+  taskId: number;
+  taskName?: string;
   reason: string;
-  dataScope: string;
-  applyTime: string;
   status: number; // 0=待审批 1=已通过 2=已拒绝
-  applicantName: string;
-  approverName?: string;
-  approveTime?: string;
-  approveRemark?: string;
+  applicantId?: number;
+  applicantName?: string;
+  applicantDeptId?: number;
+  applicantDeptName?: string;
+  auditorId?: number;
+  auditorName?: string;
+  auditComment?: string;
+  createTime?: string;
+  auditTime?: string;
 }
 
 export interface DataApplyFormParams {
-  title: string;
+  taskId: number;
   reason: string;
-  dataScope: string;
 }
 
 export interface ApproveFormParams {
@@ -494,20 +499,46 @@ export async function changePasswordApi(params: ChangePasswordParams) {
 }
 
 // --- User ---
+type RawRow = Record<string, any>;
+
+function normalizeUserRow(row: RawRow): UserItem {
+  return {
+    ...row,
+    nickname: row.nickname ?? row.realName ?? '',
+    gender: row.gender ?? row.userType ?? 0,
+    deptName: row.deptName ?? '',
+    roleIds: Array.isArray(row.roleIds) ? row.roleIds : [],
+    roleNames: Array.isArray(row.roleNames) ? row.roleNames : [],
+  } as UserItem;
+}
+
+function toUserPayload(data: UserFormParams) {
+  const { nickname, gender, ...rest } = data;
+  return { ...rest, realName: nickname, userType: gender };
+}
+
 export async function getUserListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<UserItem>>>('/user/page', { params });
+  const query: Record<string, any> = { ...params };
+  if (query.nickname && !query.realName) query.realName = query.nickname;
+  delete query.nickname;
+  const res = await request.get<ApiResponse<PageResult<UserItem>>>('/user/page', { params: query });
+  const page = res.data.data as unknown as Record<string, any>;
+  if (page && Array.isArray(page.list)) page.list = page.list.map(normalizeUserRow);
+  return res;
 }
 
 export async function getUserDetailApi(id: number) {
-  return request.get<ApiResponse<UserItem>>(`/user/${id}`);
+  const res = await request.get<ApiResponse<UserItem>>(`/user/${id}`);
+  if (res.data.data) res.data.data = normalizeUserRow(res.data.data as unknown as RawRow);
+  return res;
 }
 
 export async function createUserApi(data: UserFormParams) {
-  return request.post<ApiResponse<null>>('/user', data);
+  return request.post<ApiResponse<null>>('/user', toUserPayload(data));
 }
 
 export async function updateUserApi(data: UserFormParams) {
-  return request.put<ApiResponse<null>>('/user', data);
+  return request.put<ApiResponse<null>>('/user', toUserPayload(data));
 }
 
 export async function deleteUserApi(id: number) {
@@ -515,32 +546,64 @@ export async function deleteUserApi(id: number) {
 }
 
 export async function updateUserStatusApi(id: number, status: number) {
-  return request.put<ApiResponse<null>>(`/user/${id}/status`, { status });
+  return request.put<ApiResponse<null>>(`/user/${id}/status`, null, { params: { status } });
 }
 
 export async function assignUserRolesApi(userId: number, roleIds: number[]) {
-  return request.put<ApiResponse<null>>(`/user/${userId}/roles`, { roleIds });
+  return request.put<ApiResponse<null>>(`/user/${userId}/roles`, roleIds);
 }
 
 // --- Role ---
+function normalizeRoleRow(row: RawRow): RoleItem {
+  return {
+    ...row,
+    name: row.name ?? row.roleName ?? '',
+    code: row.code ?? row.roleCode ?? '',
+    remark: row.remark ?? row.description ?? '',
+  } as RoleItem;
+}
+
+function toRolePayload(data: RoleFormParams) {
+  return {
+    id: data.id,
+    roleName: data.name,
+    roleCode: data.code,
+    description: data.remark,
+    status: data.status,
+    menuIds: data.menuIds,
+  };
+}
+
 export async function getRoleListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<RoleItem>>>('/role/page', { params });
+  const query: Record<string, any> = { ...params };
+  if (query.name && !query.roleName) query.roleName = query.name;
+  if (query.code && !query.roleCode) query.roleCode = query.code;
+  delete query.name;
+  delete query.code;
+  const res = await request.get<ApiResponse<PageResult<RoleItem>>>('/role/page', { params: query });
+  const page = res.data.data as unknown as Record<string, any>;
+  if (page && Array.isArray(page.list)) page.list = page.list.map(normalizeRoleRow);
+  return res;
 }
 
 export async function getAllRolesApi() {
-  return request.get<ApiResponse<RoleItem[]>>('/role/list');
+  const res = await request.get<ApiResponse<RoleItem[]>>('/role/list');
+  res.data.data = (res.data.data || []).map((r) => normalizeRoleRow(r as unknown as RawRow));
+  return res;
 }
 
 export async function getRoleDetailApi(id: number) {
-  return request.get<ApiResponse<RoleItem>>(`/role/${id}`);
+  const res = await request.get<ApiResponse<RoleItem>>(`/role/${id}`);
+  if (res.data.data) res.data.data = normalizeRoleRow(res.data.data as unknown as RawRow);
+  return res;
 }
 
 export async function createRoleApi(data: RoleFormParams) {
-  return request.post<ApiResponse<null>>('/role', data);
+  return request.post<ApiResponse<null>>('/role', toRolePayload(data));
 }
 
 export async function updateRoleApi(data: RoleFormParams) {
-  return request.put<ApiResponse<null>>('/role', data);
+  return request.put<ApiResponse<null>>('/role', toRolePayload(data));
 }
 
 export async function deleteRoleApi(id: number) {
@@ -822,32 +885,60 @@ export async function auditTemplateApi(id: number, status: number, remark?: stri
 }
 
 // --- Datasource ---
+function normalizeDatasourceRow(row: RawRow): DatasourceItem {
+  return {
+    ...row,
+    name: row.name ?? row.dsName ?? '',
+    type: row.type ?? row.dsType ?? '',
+    host: row.host ?? row.ip ?? '',
+    databaseName: row.databaseName ?? row.dbName ?? '',
+    remark: row.remark ?? row.description ?? '',
+    dsName: row.dsName ?? row.name,
+    dsType: row.dsType ?? row.type,
+  } as DatasourceItem;
+}
+
+function toDatasourcePayload(data: DatasourceFormParams) {
+  return {
+    id: data.id,
+    dsName: data.name,
+    dsType: data.type,
+    ip: data.host,
+    port: data.port,
+    dbName: data.databaseName,
+    username: data.username,
+    password: data.password,
+    status: data.status,
+    description: data.remark,
+  };
+}
+
 export async function getDatasourceListApi(params: PageParams) {
-  const res = await request.get<ApiResponse<PageResult<DatasourceItem>>>('/datasource/page', { params });
-  // 归一化：后端是 dsName/dsType，早期页面按 name/type 读 → 这里双向补全，避免下拉显示 undefined
+  const query: Record<string, any> = { ...params };
+  if (query.name && !query.dsName) query.dsName = query.name;
+  if (query.type && !query.dsType) query.dsType = query.type;
+  if (query.host && !query.ip) query.ip = query.host;
+  delete query.name;
+  delete query.type;
+  delete query.host;
+  const res = await request.get<ApiResponse<PageResult<DatasourceItem>>>('/datasource/page', { params: query });
   const page = res.data.data as unknown as Record<string, any>;
-  if (page && Array.isArray(page.list)) {
-    page.list = page.list.map((d: Record<string, any>) => ({
-      ...d,
-      name: d.name ?? d.dsName,
-      type: d.type ?? d.dsType,
-      dsName: d.dsName ?? d.name,
-      dsType: d.dsType ?? d.type,
-    }));
-  }
+  if (page && Array.isArray(page.list)) page.list = page.list.map(normalizeDatasourceRow);
   return res;
 }
 
 export async function getDatasourceDetailApi(id: number) {
-  return request.get<ApiResponse<DatasourceItem>>(`/datasource/${id}`);
+  const res = await request.get<ApiResponse<DatasourceItem>>(`/datasource/${id}`);
+  if (res.data.data) res.data.data = normalizeDatasourceRow(res.data.data as unknown as RawRow);
+  return res;
 }
 
 export async function createDatasourceApi(data: DatasourceFormParams) {
-  return request.post<ApiResponse<null>>('/datasource', data);
+  return request.post<ApiResponse<null>>('/datasource', toDatasourcePayload(data));
 }
 
 export async function updateDatasourceApi(data: DatasourceFormParams) {
-  return request.put<ApiResponse<null>>('/datasource', data);
+  return request.put<ApiResponse<null>>('/datasource', toDatasourcePayload(data));
 }
 
 export async function deleteDatasourceApi(id: number) {
@@ -855,12 +946,15 @@ export async function deleteDatasourceApi(id: number) {
 }
 
 export async function testDatasourceConnectionApi(data: DatasourceFormParams) {
-  // 后端端点是 POST /datasource/test（@RequestParam），不是 /test-connection(JSON)
   const d = data as unknown as Record<string, any>;
   return request.post<ApiResponse<TestConnectionResult>>('/datasource/test', {}, {
     params: {
-      ip: d.ip, port: d.port, dbName: d.dbName ?? d.database,
-      username: d.username, password: d.password, dsType: d.dsType ?? d.type,
+      ip: d.ip ?? d.host,
+      port: d.port,
+      dbName: d.dbName ?? d.databaseName ?? d.database,
+      username: d.username,
+      password: d.password,
+      dsType: d.dsType ?? d.type,
     },
   });
 }
@@ -902,7 +996,10 @@ function normalizeTaskRow(x: Record<string, any>): Record<string, any> {
 }
 
 export async function getTaskListApi(params: PageParams) {
-  const res = await request.get<ApiResponse<PageResult<TaskItem>>>('/task/page', { params });
+  const query: Record<string, any> = { ...params };
+  if (query.name && !query.taskName) query.taskName = query.name;
+  delete query.name;
+  const res = await request.get<ApiResponse<PageResult<TaskItem>>>('/task/page', { params: query });
   const page = res.data.data as unknown as Record<string, any>;
   if (page && Array.isArray(page.list)) {
     page.list = page.list.map(normalizeTaskRow);
@@ -1063,7 +1160,12 @@ export async function submitAuditApi(data: AuditFormParams) {
 
 // --- Data Apply ---
 export async function getDataApplyListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/dataApply/', { params });
+  const query = {
+    page: params.current ?? params.page ?? 1,
+    pageSize: params.size ?? params.pageSize ?? 10,
+    status: params.status,
+  };
+  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/dataApply/page', { params: query });
 }
 
 export async function getDataApplyDetailApi(id: number) {
@@ -1071,11 +1173,15 @@ export async function getDataApplyDetailApi(id: number) {
 }
 
 export async function createDataApplyApi(data: DataApplyFormParams) {
-  return request.post<ApiResponse<null>>('/dataApply/', data);
+  return request.post<ApiResponse<null>>('/dataApply', null, {
+    params: { taskId: data.taskId, reason: data.reason },
+  });
 }
 
 export async function updateDataApplyApi(id: number, data: DataApplyFormParams) {
-  return request.put<ApiResponse<null>>(`/dataApply/${id}`, data);
+  return request.put<ApiResponse<null>>(`/dataApply/${id}`, null, {
+    params: { taskId: data.taskId, reason: data.reason },
+  });
 }
 
 export async function deleteDataApplyApi(id: number) {
@@ -1084,7 +1190,12 @@ export async function deleteDataApplyApi(id: number) {
 
 // Data Apply - Approval
 export async function getApproveListApi(params: PageParams) {
-  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/dataApply/approveList', { params });
+  return request.get<ApiResponse<PageResult<DataApplyItem>>>('/dataApply/approveList', {
+    params: {
+      page: params.current ?? params.page ?? 1,
+      pageSize: params.size ?? params.pageSize ?? 10,
+    },
+  });
 }
 
 export async function submitApprovalApi(data: ApproveFormParams) {

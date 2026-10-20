@@ -3,6 +3,7 @@ package com.reportsys.controller;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.reportsys.common.Result;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.model.SysDict;
 import com.reportsys.dao.SysDictMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,7 @@ public class DictController {
     }
 
     @PostMapping
+    @OperLog(module = "字典管理", action = "新增字典项")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Result<Long> add(@RequestBody SysDict dict) {
         try {
@@ -77,6 +79,7 @@ public class DictController {
     }
 
     @PutMapping
+    @OperLog(module = "字典管理", action = "修改字典项")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Result<Void> update(@RequestBody SysDict dict) {
         try {
@@ -88,6 +91,7 @@ public class DictController {
     }
 
     @DeleteMapping("/{id}")
+    @OperLog(module = "字典管理", action = "删除字典项")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Result<Void> delete(@PathVariable Long id) {
         try {

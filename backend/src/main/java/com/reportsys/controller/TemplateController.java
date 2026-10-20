@@ -103,6 +103,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
+    @OperLog(module = "模板管理", action = "新增模板")
     public Result<Long> add(@RequestBody RptTemplate template) {
         try {
             Long userId = getCurrentUserId();
@@ -126,6 +127,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping
+    @OperLog(module = "模板管理", action = "修改模板")
     public Result<Void> update(@RequestBody RptTemplate template) {
         try {
             List<RptTemplateField> fields = template.getFields();
@@ -144,6 +146,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/{id}")
+    @OperLog(module = "模板管理", action = "删除模板")
     public Result<Void> delete(@PathVariable Long id) {
         try {
             rptTemplateService.deleteById(id);
@@ -160,6 +163,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}/status")
+    @OperLog(module = "模板管理", action = "切换模板状态")
     public Result<Void> toggleStatus(@PathVariable Long id, @RequestParam Integer status) {
         try {
             rptTemplateService.deploy(id, status);
@@ -176,6 +180,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PutMapping("/{id}/audit")
+    @OperLog(module = "模板管理", action = "审核模板")
     public Result<Void> audit(@PathVariable Long id,
                                @RequestParam Integer auditStatus,
                                @RequestParam(required = false) String auditComment) {
@@ -213,6 +218,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/{id}/fields")
+    @OperLog(module = "模板管理", action = "保存模板字段")
     public Result<Void> saveFields(@PathVariable Long id, @RequestBody List<RptTemplateField> fields) {
         try {
             RptTemplate template = rptTemplateService.getById(id);
@@ -233,6 +239,7 @@ public class TemplateController {
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping("/{id}/deploy")
+    @OperLog(module = "模板管理", action = "发布模板")
     public Result<Void> deploy(@PathVariable Long id,
                                 @RequestParam(required = false) Long datasourceId,
                                 @RequestParam(required = false) String tableName) {

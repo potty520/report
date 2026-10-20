@@ -1,6 +1,7 @@
 package com.reportsys.controller;
 
 import com.reportsys.common.PageResult;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.common.Result;
 import com.reportsys.model.SysRole;
 import com.reportsys.service.SysRoleService;
@@ -38,9 +39,11 @@ public class RoleController {
     @GetMapping("/page")
     public Result<PageResult<SysRole>> listPage(@RequestParam(defaultValue = "1") int page,
                                                  @RequestParam(defaultValue = "10") int pageSize,
-                                                 @RequestParam(required = false) String roleName) {
+                                                 @RequestParam(required = false) String roleName,
+                                                 @RequestParam(required = false) String roleCode,
+                                                 @RequestParam(required = false) Integer status) {
         try {
-            PageResult<SysRole> result = sysRoleService.listPage(page, pageSize, roleName);
+            PageResult<SysRole> result = sysRoleService.listPage(page, pageSize, roleName, roleCode, status);
             return Result.success(result);
         } catch (Exception e) {
             return Result.error(e.getMessage());
@@ -51,6 +54,7 @@ public class RoleController {
      * 新增角色
      */
     @PostMapping
+    @OperLog(module = "角色管理", action = "新增角色")
     public Result<Void> add(@RequestBody SysRole role) {
         try {
             sysRoleService.add(role);
@@ -66,6 +70,7 @@ public class RoleController {
      * 更新角色
      */
     @PutMapping
+    @OperLog(module = "角色管理", action = "修改角色")
     public Result<Void> update(@RequestBody SysRole role) {
         try {
             sysRoleService.update(role);
@@ -82,12 +87,14 @@ public class RoleController {
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
     @PutMapping("/{id}")
+    @OperLog(module = "角色管理", action = "修改角色")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody SysRole role) {
         role.setId(id);
         return update(role);
     }
 
     @DeleteMapping("/{id}")
+    @OperLog(module = "角色管理", action = "删除角色")
     public Result<Void> delete(@PathVariable Long id) {
         try {
             sysRoleService.deleteById(id);
@@ -103,6 +110,7 @@ public class RoleController {
      * 分配菜单权限
      */
     @PutMapping("/{id}/menus")
+    @OperLog(module = "角色管理", action = "分配菜单权限")
     public Result<Void> assignMenus(@PathVariable Long id, @RequestBody List<Long> menuIds) {
         try {
             sysRoleService.assignMenus(id, menuIds);

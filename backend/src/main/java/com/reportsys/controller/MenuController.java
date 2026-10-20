@@ -1,6 +1,7 @@
 package com.reportsys.controller;
 
 import com.reportsys.common.Result;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.model.SysMenu;
 import com.reportsys.service.SysMenuService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +49,7 @@ public class MenuController {
      * 新增菜单
      */
     @PostMapping
+    @OperLog(module = "菜单管理", action = "新增菜单")
     public Result<Void> add(@RequestBody SysMenu menu) {
         try {
             sysMenuService.add(menu);
@@ -63,6 +65,7 @@ public class MenuController {
      * 更新菜单
      */
     @PutMapping
+    @OperLog(module = "菜单管理", action = "修改菜单")
     public Result<Void> update(@RequestBody SysMenu menu) {
         try {
             sysMenuService.update(menu);
@@ -79,12 +82,14 @@ public class MenuController {
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
     @PutMapping("/{id}")
+    @OperLog(module = "菜单管理", action = "修改菜单")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody SysMenu menu) {
         menu.setId(id);
         return update(menu);
     }
 
     @DeleteMapping("/{id}")
+    @OperLog(module = "菜单管理", action = "删除菜单")
     public Result<Void> delete(@PathVariable Long id) {
         try {
             sysMenuService.deleteById(id);

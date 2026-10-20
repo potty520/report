@@ -12,7 +12,7 @@ import dayjs from 'dayjs';
 const RolePage: React.FC = () => {
   const { message: msg } = App.useApp();
   const {
-    list, total, loading, fetchList, fetchRoleMenuIds, roleMenuIds, create, update, remove, setCurrentItem,
+    list, total, loading, fetchList, create, update, remove, setCurrentItem,
   } = useRoleStore();
   const { tree: menuTree, fetchTree: fetchMenuTree } = useMenuStore();
 
@@ -101,15 +101,12 @@ const RolePage: React.FC = () => {
   const handlePermAssign = async (record: RoleItem) => {
     setSelectedRole(record);
     try {
-      await fetchRoleMenuIds(record.id);
-      setCheckedMenuKeys(roleMenuIds);
+      const res = await import('@/services/api').then((m) => m.getRoleMenuIdsApi(record.id));
+      setCheckedMenuKeys(res.data.data || []);
+      setPermModalOpen(true);
     } catch {
-      // ignore
+      msg.error('加载权限失败');
     }
-    // Re-fetch to get latest menu ids
-    const res = await import('@/services/api').then((m) => m.getRoleMenuIdsApi(record.id));
-    setCheckedMenuKeys(res.data.data);
-    setPermModalOpen(true);
   };
 
   const handlePermModalOk = async () => {

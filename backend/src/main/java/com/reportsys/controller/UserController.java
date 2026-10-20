@@ -1,6 +1,7 @@
 package com.reportsys.controller;
 
 import com.reportsys.common.PageResult;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.common.Result;
 import com.reportsys.model.SysUser;
 import com.reportsys.service.SysUserService;
@@ -26,14 +27,11 @@ public class UserController {
     public Result<PageResult<SysUser>> listPage(@RequestParam(defaultValue = "1") int page,
                                                  @RequestParam(defaultValue = "10") int pageSize,
                                                  @RequestParam(required = false) String username,
+                                                 @RequestParam(required = false) String realName,
                                                  @RequestParam(required = false) Long deptId,
                                                  @RequestParam(required = false) Integer status) {
         try {
-            PageResult<SysUser> result = sysUserService.listPage(page, pageSize, username, deptId, status);
-            // 如果有status过滤，在内存中过滤(Service层未实现status参数)
-            if (status != null && result.getList() != null) {
-                result.getList().removeIf(u -> !status.equals(u.getStatus()));
-            }
+            PageResult<SysUser> result = sysUserService.listPage(page, pageSize, username, realName, deptId, status);
             return Result.success(result);
         } catch (Exception e) {
             return Result.error(e.getMessage());
@@ -48,6 +46,7 @@ public class UserController {
      * 接口一律返回"操作成功"。现在改为直接透传 Service 的校验结果。
      */
     @PostMapping
+    @OperLog(module = "用户管理", action = "新增用户")
     public Result<Void> add(@RequestBody SysUser user) {
         try {
             // 参数校验(U06)：缺少必填字段时给出明确提示，不要让 SQL 异常穿透到接口层
@@ -75,6 +74,7 @@ public class UserController {
      * 更新用户
      */
     @PutMapping
+    @OperLog(module = "用户管理", action = "修改用户")
     public Result<Void> update(@RequestBody SysUser user) {
         try {
             sysUserService.update(user);
@@ -91,12 +91,14 @@ public class UserController {
      */
     /** 兼容旧前端：PUT /xxx/{id}（id 在路径里）；委托同类 update，保留权限与校验 */
     @PutMapping("/{id}")
+    @OperLog(module = "用户管理", action = "修改用户")
     public Result<Void> updateById(@PathVariable Long id, @RequestBody SysUser user) {
         user.setId(id);
         return update(user);
     }
 
     @DeleteMapping("/{id}")
+    @OperLog(module = "用户管理", action = "删除用户")
     public Result<Void> delete(@PathVariable Long id) {
         try {
             sysUserService.deleteById(id);
@@ -112,6 +114,7 @@ public class UserController {
      * 切换状态
      */
     @PutMapping("/{id}/status")
+    @OperLog(module = "用户管理", action = "切换用户状态")
     public Result<Void> toggleStatus(@PathVariable Long id, @RequestParam Integer status) {
         try {
             SysUser user = sysUserService.getById(id);
@@ -132,6 +135,7 @@ public class UserController {
      * 分配角色
      */
     @PutMapping("/{id}/roles")
+    @OperLog(module = "用户管理", action = "分配用户角色")
     public Result<Void> assignRoles(@PathVariable Long id, @RequestBody List<Long> roleIds) {
         try {
             sysUserService.assignRoles(id, roleIds);

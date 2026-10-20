@@ -12,6 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import java.util.Comparator;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
@@ -38,7 +42,23 @@ public class SysMenuService extends ServiceImpl<SysMenuMapper, SysMenu> {
     @Transactional
     public void assignMenusToRole(Long roleId, List<Long> menuIds) {
         sysRoleMenuMapper.deleteByRoleId(roleId);
+        if (menuIds == null || menuIds.isEmpty()) return;
+
+        // Ant Design 目录在“半选”时只回传叶子节点。若只保存叶子，登录菜单树
+        // 从 parentId=0 递归构建时会找不到父目录，整棵业务分支都会消失。
+        // 因此在写库前统一补齐所有祖先菜单。
+        Map<Long, SysMenu> menuById = menuMapper.selectList(null).stream()
+                .collect(Collectors.toMap(SysMenu::getId, Function.identity(), (a, b) -> a));
+        Set<Long> expanded = new LinkedHashSet<>();
         for (Long menuId : menuIds) {
+            Long current = menuId;
+            while (current != null && current != 0L && menuById.containsKey(current)) {
+                if (!expanded.add(current)) break;
+                SysMenu menu = menuById.get(current);
+                current = menu.getParentId();
+            }
+        }
+        for (Long menuId : expanded) {
             SysRoleMenu rm = new SysRoleMenu();
             rm.setRoleId(roleId);
             rm.setMenuId(menuId);

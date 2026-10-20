@@ -2,6 +2,7 @@ package com.reportsys.controller;
 
 import com.reportsys.common.PageResult;
 import com.reportsys.common.Result;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.model.RptDataApply;
 import com.reportsys.service.RptDataApplyService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,7 @@ public class DataApplyController {
      * 提交申请
      */
     @PostMapping
+    @OperLog(module = "数据申请", action = "提交申请")
     public Result<Void> apply(@RequestParam Long taskId,
                                @RequestParam String reason) {
         try {
@@ -54,6 +56,50 @@ public class DataApplyController {
             apply.setApplicantId(userId);
             apply.setReason(reason);
             rptDataApplyService.apply(apply);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}")
+    public Result<RptDataApply> detail(@PathVariable Long id) {
+        RptDataApply apply = rptDataApplyService.getById(id);
+        return apply == null ? Result.error("申请不存在") : Result.success(apply);
+    }
+
+    /**
+     * 修改本人待审批申请
+     */
+    @PutMapping("/{id}")
+    @OperLog(module = "数据申请", action = "修改申请")
+    public Result<Void> update(@PathVariable Long id,
+                               @RequestParam Long taskId,
+                               @RequestParam String reason) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptDataApplyService.updatePending(id, taskId, reason, userId);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 删除本人待审批申请
+     */
+    @DeleteMapping("/{id}")
+    @OperLog(module = "数据申请", action = "删除申请")
+    public Result<Void> delete(@PathVariable Long id) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptDataApplyService.deletePending(id, userId);
             return Result.success();
         } catch (AccessDeniedException e) {
             throw e;
@@ -83,6 +129,7 @@ public class DataApplyController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','AUDIT_USER','DEPT_ADMIN')")
 
     @PostMapping("/{id}/approve")
+    @OperLog(module = "数据申请", action = "审批通过")
     public Result<Void> approve(@PathVariable Long id) {
         try {
             Long userId = getCurrentUserId();
@@ -104,6 +151,7 @@ public class DataApplyController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','AUDIT_USER','DEPT_ADMIN')")
 
     @PostMapping("/{id}/reject")
+    @OperLog(module = "数据申请", action = "审批拒绝")
     public Result<Void> reject(@PathVariable Long id,
                                 @RequestParam(required = false) String auditComment) {
         try {

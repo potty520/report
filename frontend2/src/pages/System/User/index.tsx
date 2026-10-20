@@ -33,7 +33,7 @@ const UserPage: React.FC = () => {
   const deptOptions = React.useMemo(() => {
     const flatten = (items: any[], prefix = ''): { label: string; value: number }[] => {
       return items.reduce((acc: any[], item: any) => {
-        acc.push({ label: prefix + item.name, value: item.id });
+        acc.push({ label: prefix + (item.deptName || item.name || item.id), value: item.id });
         if (item.children && item.children.length > 0) {
           acc.push(...flatten(item.children, prefix + '├ '));
         }
@@ -166,8 +166,13 @@ const UserPage: React.FC = () => {
     },
     { title: '部门', dataIndex: 'deptName', width: 130 },
     {
-      title: '角色', dataIndex: 'roleIds', width: 180,
-      render: (v: string[]) => v?.map((r) => <Tag key={r} color="blue">{r}</Tag>),
+      title: '角色', dataIndex: 'roleNames', width: 180,
+      render: (v: string[] | undefined, record) => {
+        const labels = v && v.length > 0 ? v : (record.roleIds || []).map(String);
+        return labels.length > 0
+          ? labels.map((label) => <Tag key={label} color="blue">{label}</Tag>)
+          : '-';
+      },
     },
     {
       title: '状态', dataIndex: 'status', width: 80, align: 'center',

@@ -11,7 +11,6 @@ import com.reportsys.model.SysRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
-import java.time.LocalDateTime;
 
 @Service
 public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
@@ -20,12 +19,13 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
     @Resource private SysMenuService menuService;
     @Resource private com.reportsys.dao.SysUserRoleMapper userRoleMapper;
 
-    public PageResult<SysRole> pageList(int pageNum, int pageSize, String keyword) {
+    public PageResult<SysRole> pageList(int pageNum, int pageSize, String roleName,
+                                        String roleCode, Integer status) {
         Page<SysRole> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysRole> wrapper = new LambdaQueryWrapper<>();
-        if (keyword != null && !keyword.isEmpty()) {
-            wrapper.like(SysRole::getRoleName, keyword).or().like(SysRole::getRoleCode, keyword);
-        }
+        if (roleName != null && !roleName.isEmpty()) wrapper.like(SysRole::getRoleName, roleName);
+        if (roleCode != null && !roleCode.isEmpty()) wrapper.like(SysRole::getRoleCode, roleCode);
+        if (status != null) wrapper.eq(SysRole::getStatus, status);
         wrapper.orderByDesc(SysRole::getCreateTime);
         return PageResult.of(roleMapper.selectPage(page, wrapper));
     }
@@ -34,7 +34,7 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
     public void addRole(SysRole role) {
         role.setCreateTime(LocalDateTime.now());
         roleMapper.insert(role);
-        if (role.getMenuIds() != null && !role.getMenuIds().isEmpty()) {
+        if (role.getMenuIds() != null) {
             menuService.assignMenusToRole(role.getId(), role.getMenuIds());
         }
     }
@@ -42,7 +42,7 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
     @Transactional
     public void updateRole(SysRole role) {
         roleMapper.updateById(role);
-        if (role.getMenuIds() != null && !role.getMenuIds().isEmpty()) {
+        if (role.getMenuIds() != null) {
             menuService.assignMenusToRole(role.getId(), role.getMenuIds());
         }
     }
@@ -71,7 +71,10 @@ public class SysRoleService extends ServiceImpl<SysRoleMapper, SysRole> {
     public void update(SysRole role) { updateRole(role); }
     public void deleteById(Long id) { deleteRole(id); }
     public List<SysRole> listAll() { return roleMapper.selectList(new LambdaQueryWrapper<>()); }
-    public PageResult<SysRole> listPage(int pageNum, int pageSize, String keyword) { return pageList(pageNum, pageSize, keyword); }
+    public PageResult<SysRole> listPage(int pageNum, int pageSize, String roleName,
+                                        String roleCode, Integer status) {
+        return pageList(pageNum, pageSize, roleName, roleCode, status);
+    }
     public void assignMenus(Long roleId, List<Long> menuIds) { menuService.assignMenusToRole(roleId, menuIds); }
     public List<Long> getRoleMenuIds(Long roleId) {
         return menuService.getRoleMenuIds(roleId);
