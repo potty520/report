@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.reportsys.common.PageResult;
 import com.reportsys.common.Result;
+import com.reportsys.annotation.OperLog;
 import com.reportsys.dao.RptDataApplyMapper;
 import com.reportsys.dao.RptDatasourceMapper;
 import com.reportsys.dao.RptTaskAssignMapper;
@@ -202,6 +203,7 @@ public class CompatController {
      */
     @PreAuthorize("isAuthenticated()")
     @PutMapping("/dataApply/{id}")
+    @OperLog(module = "数据申请", action = "修改申请")
     public Result<Void> updateDataApply(@PathVariable Long id, @RequestBody RptDataApply apply) {
         RptDataApply exist = rptDataApplyMapper.selectById(id);
         if (exist == null) {
@@ -229,6 +231,7 @@ public class CompatController {
      */
     @PreAuthorize("isAuthenticated()")
     @DeleteMapping("/dataApply/{id}")
+    @OperLog(module = "数据申请", action = "删除申请")
     public Result<Void> deleteDataApply(@PathVariable Long id) {
         RptDataApply exist = rptDataApplyMapper.selectById(id);
         if (exist == null) {

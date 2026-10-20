@@ -162,7 +162,7 @@ const DataApplyPage: React.FC = () => {
       <Modal title={modalTitle} open={modalOpen} onOk={handleModalOk} onCancel={() => setModalOpen(false)} destroyOnClose width={560}>
         <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="taskId" label="申请任务" rules={[{ required: true, message: '请选择申请任务' }]}>
-            <Select placeholder="请选择需要申请数据的任务" showSearch optionFilterProp="label" options={taskOptions} />
+            <Select placeholder="请选择需要申请数据的任务" showSearch optionFilterProp="label" options={taskOptions} disabled={!!editingId} />
           </Form.Item>
           <Form.Item name="reason" label="申请原因" rules={[{ required: true, message: '请输入申请原因' }]}>
             <Input.TextArea rows={5} placeholder="请描述申请原因、使用目的和预期范围" />

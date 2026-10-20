@@ -64,50 +64,6 @@ public class DataApplyController {
         }
     }
 
-    @GetMapping("/{id}")
-    public Result<RptDataApply> detail(@PathVariable Long id) {
-        RptDataApply apply = rptDataApplyService.getById(id);
-        return apply == null ? Result.error("申请不存在") : Result.success(apply);
-    }
-
-    /**
-     * 修改本人待审批申请
-     */
-    @PutMapping("/{id}")
-    @OperLog(module = "数据申请", action = "修改申请")
-    public Result<Void> update(@PathVariable Long id,
-                               @RequestParam Long taskId,
-                               @RequestParam String reason) {
-        try {
-            Long userId = getCurrentUserId();
-            if (userId == null) return Result.error("用户未登录");
-            rptDataApplyService.updatePending(id, taskId, reason, userId);
-            return Result.success();
-        } catch (AccessDeniedException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
-    }
-
-    /**
-     * 删除本人待审批申请
-     */
-    @DeleteMapping("/{id}")
-    @OperLog(module = "数据申请", action = "删除申请")
-    public Result<Void> delete(@PathVariable Long id) {
-        try {
-            Long userId = getCurrentUserId();
-            if (userId == null) return Result.error("用户未登录");
-            rptDataApplyService.deletePending(id, userId);
-            return Result.success();
-        } catch (AccessDeniedException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
-    }
-
     /**
      * 待审批列表
      */
