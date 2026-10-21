@@ -44,8 +44,15 @@ public class DataInitializer implements CommandLineRunner {
             return;
         }
 
-        String adminPass = passwordEncoder.encode("***REMOVED_DEFAULT_ADMIN_PASSWORD***");
-        String userPass = passwordEncoder.encode("***REMOVED_DEFAULT_USER_PASSWORD***");
+        // 不在源码中保留默认口令。仅在显式配置引导口令时初始化账号。
+        String adminBootstrapPassword = System.getenv("REPORT_BOOTSTRAP_ADMIN_PASSWORD");
+        String userBootstrapPassword = System.getenv("REPORT_BOOTSTRAP_USER_PASSWORD");
+        if (adminBootstrapPassword == null || adminBootstrapPassword.trim().isEmpty()
+                || userBootstrapPassword == null || userBootstrapPassword.trim().isEmpty()) {
+            return;
+        }
+        String adminPass = passwordEncoder.encode(adminBootstrapPassword);
+        String userPass = passwordEncoder.encode(userBootstrapPassword);
 
         // Insert departments
         jdbcTemplate.update("INSERT IGNORE INTO sys_dept (id, parent_id, dept_name, dept_code, sort) VALUES (1, 0, ?, 'ROOT', 0)", "根部门");
