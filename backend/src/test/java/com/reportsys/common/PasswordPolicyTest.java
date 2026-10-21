@@ -22,7 +22,7 @@ class PasswordPolicyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"123456", "12345678", "password", "***REMOVED_DEFAULT_ADMIN_PASSWORD***", "qwerty", "a12345678"})
+    @ValueSource(strings = {"123456", "12345678", "password", "letmein", "qwerty", "a12345678"})
     @DisplayName("常见弱口令应被拒绝")
     void rejectWeakPasswords(String pwd) {
         assertNotNull(PasswordPolicy.check(pwd), "弱口令应被拒绝: " + pwd);
@@ -72,8 +72,8 @@ class PasswordPolicyTest {
     @Test
     @DisplayName("合规密码应通过")
     void acceptStrongPasswords() {
-        assertNull(PasswordPolicy.check("***REMOVED_ADMIN_PASSWORD***"));
-        assertNull(PasswordPolicy.check("***REMOVED_USER_PASSWORD***"));
+        assertNull(PasswordPolicy.check("TestAdmin@2026"));
+        assertNull(PasswordPolicy.check("TestUser@2026"));
         assertNull(PasswordPolicy.check("abcd1234"));      // 小写+数字，两类
         assertNull(PasswordPolicy.check("Hello2026"));     // 大写+小写+数字
     }

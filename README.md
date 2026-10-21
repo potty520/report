@@ -105,4 +105,4 @@ npm install
 npm start
 ```
 
-默认管理员账号: admin / ***REMOVED_DEFAULT_ADMIN_PASSWORD***
+管理员账号不再使用仓库内默认口令；首次初始化时通过 `REPORT_BOOTSTRAP_ADMIN_PASSWORD` / `REPORT_BOOTSTRAP_USER_PASSWORD` 环境变量显式设置。
