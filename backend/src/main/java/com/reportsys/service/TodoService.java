@@ -82,31 +82,104 @@ public class TodoService {
             if (task != null && task.getCreateBy() != null) recipients.add(task.getCreateBy());
         }
         for (Long userId : recipients) {
+            // 同一任务同一类型只保留一条未读：原实现每次分派/催办都插一条，
+            // 反复分派会把「未读消息」堆到几百条（与真实待办数完全脱节）。
+            if (hasUnread(userId, taskId, msgType)) continue;
             send(userId, title, content, msgType, taskId, null, createBy);
         }
         return recipients.size();
     }
 
-    /** 待办汇总 */
+    /** 是否已有同任务、同类型的未读消息 */
+    private boolean hasUnread(Long userId, Long taskId, String msgType) {
+        Long n = sysMessageMapper.selectCount(Wrappers.<SysMessage>lambdaQuery()
+                .eq(SysMessage::getUserId, userId)
+                .eq(SysMessage::getBizTaskId, taskId)
+                .eq(SysMessage::getMsgType, StrUtil.isBlank(msgType) ? "SYSTEM" : msgType)
+                .eq(SysMessage::getReadFlag, 0));
+        return n != null && n > 0;
+    }
+
+    /**
+     * 待办汇总。
+     *
+     * 缺陷修复：「待办」原先取的是<b>未读站内消息数</b>、doneCount 取已读消息数，
+     * 而分派/催办/超期扫描每次都会发消息且没有按任务去重，数字只增不减——
+     * 实测一个只有 52 个分派任务、1 条填报数据的用户，接口返回「待办 158」。
+     *
+     * 现在 todoCount 按真实待办计算（待填 + 待审 + 待批），消息未读单独放在 unreadCount，
+     * 前端顶栏红点用 unreadCount，待办卡片用 todoCount。
+     */
     public Map<String, Object> summary(Long userId) {
         Map<String, Object> result = new LinkedHashMap<>();
-        Long unread = sysMessageMapper.selectCount(Wrappers.<SysMessage>lambdaQuery()
-                .eq(SysMessage::getUserId, userId).eq(SysMessage::getReadFlag, 0));
-        Long read = sysMessageMapper.selectCount(Wrappers.<SysMessage>lambdaQuery()
-                .eq(SysMessage::getUserId, userId).eq(SysMessage::getReadFlag, 1));
-        Long today = sysMessageMapper.selectCount(Wrappers.<SysMessage>lambdaQuery()
-                .eq(SysMessage::getUserId, userId).apply("DATE(create_time) = CURDATE()"));
-        Long overdue = jdbcTemplate.queryForObject(
+
+        // 待填报：分派给我、任务未结束、且我还没有已提交的数据
+        long fillTodo = count(
+                "SELECT COUNT(*) FROM rpt_task t WHERE t.status IN (1,2) "
+                        + "AND EXISTS (SELECT 1 FROM rpt_task_assign a WHERE a.task_id = t.id "
+                        + "AND a.assign_type = 'FILL' AND a.user_id = ?) "
+                        + "AND NOT EXISTS (SELECT 1 FROM rpt_task_data d WHERE d.task_id = t.id "
+                        + "AND d.fill_user_id = ? AND d.status = 1)", userId, userId);
+
+        // 待审核：分派我为审核人、已提交且还没有一级审核结论的数据（排除自己提交的）
+        long auditTodo = count(
+                "SELECT COUNT(DISTINCT d.id) FROM rpt_task_data d "
+                        + "JOIN rpt_task_assign a ON a.task_id = d.task_id "
+                        + "AND a.assign_type = 'AUDIT' AND a.user_id = ? "
+                        + "WHERE d.status = 1 AND COALESCE(d.audit_status, 0) = 0 "
+                        + "AND (d.fill_user_id IS NULL OR d.fill_user_id <> ?)", userId, userId);
+
+        // 待审批：只有具备审批权限的角色才统计数据申请
+        long applyTodo = 0L;
+        if (isApprover(userId)) {
+            applyTodo = count("SELECT COUNT(*) FROM rpt_data_apply ap WHERE ap.status = 0 "
+                    + "AND (ap.applicant_id IS NULL OR ap.applicant_id <> ?)", userId);
+        }
+
+        long unread = count("SELECT COUNT(*) FROM sys_message WHERE user_id = ? AND read_flag = 0", userId);
+        long read = count("SELECT COUNT(*) FROM sys_message WHERE user_id = ? AND read_flag = 1", userId);
+        long today = count("SELECT COUNT(*) FROM sys_message WHERE user_id = ? AND DATE(create_time) = CURDATE()", userId);
+        // 已办：我提交且审核通过的填报 + 我审过的数据
+        long done = count("SELECT COUNT(*) FROM rpt_task_data d WHERE "
+                + "(d.fill_user_id = ? AND d.status = 1 AND d.audit_status = 1) "
+                + "OR (d.audit_user_id = ? AND d.audit_status IN (1,2))", userId, userId);
+        long overdue = count(
                 "SELECT COUNT(*) FROM rpt_task t WHERE t.status IN (1,2) AND t.fill_deadline IS NOT NULL "
                         + "AND t.fill_deadline < NOW() AND NOT EXISTS (SELECT 1 FROM rpt_task_data d "
                         + "WHERE d.task_id = t.id AND d.status = 1) AND (t.create_by = ? OR EXISTS ("
                         + "SELECT 1 FROM rpt_task_assign a WHERE a.task_id = t.id AND a.user_id = ?))",
-                Long.class, userId, userId);
-        result.put("todoCount", unread == null ? 0 : unread);
-        result.put("doneCount", read == null ? 0 : read);
-        result.put("todayCount", today == null ? 0 : today);
-        result.put("overdueCount", overdue == null ? 0 : overdue);
+                userId, userId);
+
+        result.put("todoCount", fillTodo + auditTodo + applyTodo);
+        result.put("fillTodo", fillTodo);
+        result.put("auditTodo", auditTodo);
+        result.put("applyTodo", applyTodo);
+        result.put("doneCount", done);
+        result.put("unreadCount", unread);
+        result.put("readCount", read);
+        result.put("todayCount", today);
+        result.put("overdueCount", overdue);
         return result;
+    }
+
+    /** 是否具备数据申请审批权限（审批列表 /dataApply/approveList 的角色口径） */
+    private boolean isApprover(Long userId) {
+        Long n = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sys_user_role ur JOIN sys_role r ON r.id = ur.role_id "
+                        + "WHERE ur.user_id = ? AND r.role_code IN ('SUPER_ADMIN','DEPT_ADMIN','AUDIT_USER')",
+                Long.class, userId);
+        return n != null && n > 0;
+    }
+
+    /** 计数查询（单值） */
+    private long count(String sql, Object... args) {
+        try {
+            Long n = jdbcTemplate.queryForObject(sql, Long.class, args);
+            return n == null ? 0L : n;
+        } catch (Exception e) {
+            log.warn("待办统计失败: {} ({})", e.getMessage(), sql);
+            return 0L;
+        }
     }
 
     /** 消息列表（分页） */

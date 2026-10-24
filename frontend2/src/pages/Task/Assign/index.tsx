@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm, App, Transfer,
+  Table, Button, Space, Tag, Modal, Form, Input, Select, Radio, message, Popconfirm, App, Transfer,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -21,6 +21,8 @@ const TaskAssignPage: React.FC = () => {
   const [searchParams, setSearchParams] = useState<Record<string, any>>({});
   const [taskList, setTaskList] = useState<TaskItem[]>([]);
   const [targetKeys, setTargetKeys] = useState<string[]>([]);
+  // 分派类型：FILL=填报人、AUDIT=审核人（后端 /task/{id}/assign 支持 assignType）
+  const [assignType, setAssignType] = useState<'FILL' | 'AUDIT'>('FILL');
 
   const doFetch = useCallback((params: Record<string, any> = {}) => {
     fetchAssignList({ current: 1, size: 10, ...params });
@@ -28,8 +30,12 @@ const TaskAssignPage: React.FC = () => {
 
   const loadTasks = async () => {
     try {
-      const res = await getTaskListApi({ current: 1, size: 1000, status: 1 });
-      setTaskList(res.data.data.list || []);
+      // 缺陷修复：原先只查 status=1（已发布），但首次分派后任务会变成 2（填报中），
+      // 于是再也选不到该任务——补派审核人/追加填报人这条路直接断掉。
+      // 这里拉全部任务，前端只保留「已发布(1)/填报中(2)」两种可继续分派的状态。
+      const res = await getTaskListApi({ current: 1, size: 1000 });
+      const list = (res.data.data.list || []) as TaskItem[];
+      setTaskList(list.filter((t) => t.status === 1 || t.status === 2));
     } catch { /* ignore */ }
   };
 
@@ -54,6 +60,7 @@ const TaskAssignPage: React.FC = () => {
   const handleAdd = () => {
     editForm.resetFields();
     setTargetKeys([]);
+    setAssignType('FILL');
     setModalOpen(true);
   };
 
@@ -78,12 +85,13 @@ const TaskAssignPage: React.FC = () => {
       }
       // 后端 TaskController.assign 的 assignType 是必填 @RequestParam（没有 required=false），
       // 缺参直接 400。本页只有「任务分派」一个入口，语义为填报分派 → FILL。
+      // 缺陷修复：原先固定 FILL，界面无法分派审核人，导致两级审核页面永远空
       await assignTask({
         taskId: values.taskId,
         deptIds: targetKeys.map(Number),
-        assignType: 'FILL',
+        assignType,
       });
-      msg.success('任务分派成功');
+      msg.success(assignType === 'AUDIT' ? '审核分派成功' : '任务分派成功');
       setModalOpen(false);
       doFetch(searchParams);
     } catch (error: any) {
@@ -183,6 +191,12 @@ const TaskAssignPage: React.FC = () => {
                 <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>
               ))}
             </Select>
+          </Form.Item>
+          <Form.Item label="分派类型" required>
+            <Radio.Group value={assignType} onChange={(e) => setAssignType(e.target.value)}>
+              <Radio.Button value="FILL">填报分派（下达填报任务）</Radio.Button>
+              <Radio.Button value="AUDIT">审核分派（指定审核人）</Radio.Button>
+            </Radio.Group>
           </Form.Item>
           <Form.Item label="选择部门">
             <Transfer

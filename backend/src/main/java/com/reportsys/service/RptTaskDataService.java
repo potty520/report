@@ -25,6 +25,10 @@ import java.util.Map;
 @Service
 public class RptTaskDataService {
 
+    /** 入库前是否要求两级审核通过（默认开启；历史部署可用 REPORT_INBOUND_REQUIRE_AUDIT=false 关闭） */
+    @org.springframework.beans.factory.annotation.Value("${report.inbound.require-audit:true}")
+    private boolean requireAudit;
+
     @Autowired
     private RptTaskDataMapper rptTaskDataMapper;
     @Autowired
@@ -146,19 +150,34 @@ public class RptTaskDataService {
         // 并发修复（审计 P0-2）：用「条件更新」原子抢占，替代 check-then-act。
         // 只在 status 仍为草稿(0) 时更新，影响行数为 0 说明已被并发请求提交过。
         LocalDateTime now = LocalDateTime.now();
+        boolean resubmit = taskData.getAuditStatus() != null && taskData.getAuditStatus() == 2;
         int claimed = rptTaskDataMapper.update(null,
                 Wrappers.<RptTaskData>lambdaUpdate()
                         .set(RptTaskData::getStatus, 1)
                         .set(RptTaskData::getSubmitTime, now)
+                        // 重新提交 = 开启新一轮审核：把上一轮的审核结论（尤其是驳回意见）清干净，
+                        // 否则会出现终态“已通过”却挂着上一次“驳回原因：金额需复核”的脏数据。
                         .set(RptTaskData::getAuditStatus, 0)
+                        .set(RptTaskData::getAuditComment, null)
+                        .set(RptTaskData::getAuditUserId, null)
+                        .set(RptTaskData::getAuditTime, null)
+                        .set(RptTaskData::getDeptAuditStatus, 0)
+                        .set(RptTaskData::getDeptAuditUserId, null)
+                        .set(RptTaskData::getDeptAuditTime, null)
+                        .set(RptTaskData::getDeptAuditComment, null)
+                        .set(RptTaskData::getTaskAuditStatus, 0)
+                        .set(RptTaskData::getTaskAuditUserId, null)
+                        .set(RptTaskData::getTaskAuditTime, null)
+                        .set(RptTaskData::getTaskAuditComment, null)
                         .eq(RptTaskData::getId, dataId)
                         .and(w -> w.isNull(RptTaskData::getStatus).or().eq(RptTaskData::getStatus, 0)));
         if (claimed == 0) {
             throw new RuntimeException("数据已提交或状态已变更，请刷新后重试");
         }
         // P0-C：记录流转轨迹
-        processLog.log(taskData.getTaskId(), dataId, "SUBMIT", "提交填报", "SUBMIT",
-                taskData.getFillUserId(), "提交填报数据");
+        processLog.log(taskData.getTaskId(), dataId, "SUBMIT",
+                resubmit ? "重新提交填报" : "提交填报", "SUBMIT", taskData.getFillUserId(),
+                resubmit ? "驳回后重新提交" : "提交填报数据");
 
         // 更新任务分派状态（条件更新，避免重复写）
         rptTaskAssignMapper.update(null,
@@ -274,6 +293,12 @@ public class RptTaskDataService {
             task.setUpdateTime(LocalDateTime.now());
             rptTaskMapper.updateById(task);
         }
+
+        // 缺陷修复：一级审核（通过/驳回）原先完全不写流转轨迹，
+        // 时间线上看不到“谁在什么时候因为什么驳回”，审计链断了。
+        boolean pass = auditStatus != null && auditStatus == 1;
+        processLog.log(taskData.getTaskId(), dataId, "AUDIT",
+                pass ? "审核通过" : "审核驳回", pass ? "PASS" : "REJECT", auditUserId, auditComment);
     }
 
     private void fillExtInfo(List<RptTaskData> list) {
@@ -316,10 +341,18 @@ public class RptTaskDataService {
     // ========================================================================
 
     /**
-     * 把已提交的填报数据（dataJson）写回模板物化的目标业务库
+     * 把已提交的填报数据（dataJson）写回模板物化的目标业务库。
+     *
+     * 缺陷修复：
+     * 1) 原先不校验审核状态，未审核（甚至刚提交）的数据也能入库；现默认要求两级审核通过
+     *    （{@code report.inbound.require-audit=false} 可关闭，兼容尚未启用双通道审核的历史部署）。
+     * 2) 原先不幂等：模板没有主键字段时 {@code writeRows} 走纯 INSERT，重复点「入库」就重复插行；
+     *    现默认跳过已入库（inbound_status=1）的数据，确需重灌时显式传 {@code force=true}。
+     *
+     * @param force true=忽略「已入库」标记重新写入
      */
     @Transactional
-    public Map<String, Object> commitToTarget(Long taskId, Long dataId, Long operatorId) {
+    public Map<String, Object> commitToTarget(Long taskId, Long dataId, Long operatorId, boolean force) {
         RptTask task = rptTaskMapper.selectById(taskId);
         if (task == null) throw new RuntimeException("任务不存在");
         if (task.getTemplateId() == null) throw new RuntimeException("任务未关联模板");
@@ -370,6 +403,46 @@ public class RptTaskDataService {
         }
         if (dataList.isEmpty()) throw new RuntimeException("没有可入库的填报数据，请先保存或导入数据");
 
+        // 审核门禁：默认只允许「部门审核 + 任务方审核」都通过的数据入库
+        int skippedUnaudited = 0;
+        if (requireAudit) {
+            List<RptTaskData> approved = new ArrayList<>();
+            for (RptTaskData d : dataList) {
+                boolean deptPass = d.getDeptAuditStatus() != null && d.getDeptAuditStatus() == 1;
+                boolean taskPass = d.getTaskAuditStatus() != null && d.getTaskAuditStatus() == 1;
+                // 兼容历史单级审核数据：只走了 audit_status 的旧记录仍允许入库
+                boolean legacyPass = d.getDeptAuditStatus() == null && d.getTaskAuditStatus() == null
+                        && d.getAuditStatus() != null && d.getAuditStatus() == 1;
+                if ((deptPass && taskPass) || legacyPass) {
+                    approved.add(d);
+                } else {
+                    skippedUnaudited++;
+                }
+            }
+            dataList = approved;
+        }
+        if (dataList.isEmpty() && skippedUnaudited > 0) {
+            throw new RuntimeException("有 " + skippedUnaudited
+                    + " 条填报数据未通过两级审核，不能入库");
+        }
+
+        // 幂等：默认跳过已入库的数据，避免重复点「入库」在无主键模板上插出重复行
+        int skippedInbound = 0;
+        if (!force) {
+            List<RptTaskData> pending = new ArrayList<>();
+            for (RptTaskData d : dataList) {
+                if (d.getInboundStatus() != null && d.getInboundStatus() == 1) {
+                    skippedInbound++;
+                } else {
+                    pending.add(d);
+                }
+            }
+            dataList = pending;
+        }
+        if (dataList.isEmpty()) {
+            throw new RuntimeException("选中的数据已全部入库（重复提交已忽略）；如确需重灌请传 force=true");
+        }
+
         List<Map<String, Object>> rows = new ArrayList<>();
         for (RptTaskData data : dataList) {
             rows.addAll(parseDataJson(data.getDataJson(), fields));
@@ -407,6 +480,8 @@ public class RptTaskDataService {
         result.put("rows", rows.size());
         result.put("affected", affected);
         result.put("dbName", materializeService.resolveDatasource(template).getDbName());
+        result.put("skippedInbound", skippedInbound);
+        result.put("skippedUnaudited", skippedUnaudited);
         return result;
     }
 
@@ -808,11 +883,26 @@ public class RptTaskDataService {
                 Long dataId = Long.valueOf(raw.trim());
                 RptTaskData data = rptTaskDataMapper.selectById(dataId);
                 if (data == null) continue;
-                data.setCorrectStatus(1);
-                data.setStatus(0);
-                data.setSubmitTime(null);
-                data.setUpdateTime(LocalDateTime.now());
-                rptTaskDataMapper.updateById(data);
+                // 补正 = 重新填报：除退回草稿外，必须清空上一轮审核结论。
+                // 否则 fillData 的「已审核通过，不能再修改」守卫会把填报人挡在门外，补正流程直接走死。
+                rptTaskDataMapper.update(null,
+                        Wrappers.<RptTaskData>lambdaUpdate()
+                                .set(RptTaskData::getCorrectStatus, 1)
+                                .set(RptTaskData::getStatus, 0)
+                                .set(RptTaskData::getSubmitTime, null)
+                                .set(RptTaskData::getAuditStatus, 0)
+                                .set(RptTaskData::getAuditComment, "")
+                                .set(RptTaskData::getAuditUserId, null)
+                                .set(RptTaskData::getAuditTime, null)
+                                .set(RptTaskData::getDeptAuditStatus, 0)
+                                .set(RptTaskData::getDeptAuditUserId, null)
+                                .set(RptTaskData::getDeptAuditTime, null)
+                                .set(RptTaskData::getDeptAuditComment, "")
+                                .set(RptTaskData::getTaskAuditStatus, 0)
+                                .set(RptTaskData::getTaskAuditUserId, null)
+                                .set(RptTaskData::getTaskAuditTime, null)
+                                .set(RptTaskData::getTaskAuditComment, "")
+                                .eq(RptTaskData::getId, dataId));
                 updated++;
             }
         }

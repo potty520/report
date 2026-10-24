@@ -50,9 +50,53 @@ public class RptDataApplyService {
         if (existApply != null) throw new RuntimeException("已存在待审批的申请，请勿重复提交");
 
         apply.setStatus(0); // 待审
-        apply.setApplicantDeptId(apply.getApplicantDeptId());
+        // 补全申请人部门（前端不传时按账号所属部门兜底）
+        if (apply.getApplicantDeptId() == null) {
+            SysUser applicant = sysUserMapper.selectById(apply.getApplicantId());
+            if (applicant != null) {
+                apply.setApplicantDeptId(applicant.getDeptId());
+            }
+        }
         apply.setCreateTime(LocalDateTime.now());
         rptDataApplyMapper.insert(apply);
+    }
+
+    /**
+     * 修改本人未被审批的申请。
+     *
+     * 缺陷修复：前端一直调 PUT /dataApply/{id}，但后端没有这个端点，编辑按钮实际是坏的。
+     */
+    @Transactional
+    public void updateOwn(Long id, RptDataApply body, Long userId) {
+        RptDataApply apply = rptDataApplyMapper.selectById(id);
+        if (apply == null) throw new RuntimeException("申请不存在");
+        if (userId == null || !userId.equals(apply.getApplicantId())) {
+            throw new org.springframework.security.access.AccessDeniedException("只能修改本人的申请");
+        }
+        if (apply.getStatus() != null && apply.getStatus() != 0) {
+            throw new RuntimeException("已审批的申请不能修改");
+        }
+        RptDataApply upd = new RptDataApply();
+        upd.setId(id);
+        upd.setTaskId(body.getTaskId());
+        upd.setTitle(body.getTitle());
+        upd.setDataScope(body.getDataScope());
+        upd.setReason(body.getReason());
+        rptDataApplyMapper.updateById(upd);
+    }
+
+    /** 删除本人待审批的申请（前端删除按钮对应 DELETE /dataApply/{id}） */
+    @Transactional
+    public void deleteOwn(Long id, Long userId) {
+        RptDataApply apply = rptDataApplyMapper.selectById(id);
+        if (apply == null) return;
+        if (userId == null || !userId.equals(apply.getApplicantId())) {
+            throw new org.springframework.security.access.AccessDeniedException("只能删除本人的申请");
+        }
+        if (apply.getStatus() != null && apply.getStatus() != 0) {
+            throw new RuntimeException("已审批的申请不能删除");
+        }
+        rptDataApplyMapper.deleteById(id);
     }
 
     /**
@@ -143,6 +187,11 @@ public class RptDataApplyService {
                 SysUser u = sysUserMapper.selectById(apply.getAuditorId());
                 if (u != null) apply.setAuditorName(u.getRealName() != null ? u.getRealName() : u.getUsername());
             }
+            // 前端字段名兼容：applyTime / approverName / approveTime / approveRemark
+            apply.setApplyTime(apply.getCreateTime() == null ? null : apply.getCreateTime().toString().replace('T', ' '));
+            apply.setApproveTime(apply.getAuditTime() == null ? null : apply.getAuditTime().toString().replace('T', ' '));
+            apply.setApproverName(apply.getAuditorName());
+            apply.setApproveRemark(apply.getAuditComment());
         }
     }
 

@@ -28,6 +28,11 @@ spring:
       initial-size: 5
       min-idle: 5
       max-active: 20
+      # 会话时区固定东八区。
+      # 缺陷修复：MySQL 容器默认 UTC 时，NOW()/CURDATE()/DEFAULT CURRENT_TIMESTAMP 会比业务时间早 8 小时，
+      # 与 JVM 的 LocalDateTime.now() 叠加后，所有提交时间、超期判定、「今日」统计都偏移一天/八小时。
+      # JVM 侧见 ReportApplication 的 TimeZone.setDefault。
+      connection-init-sqls: SET time_zone = '+08:00'
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
@@ -52,6 +57,10 @@ mybatis-plus:
 #   REPORT_DS_TEST_ALLOWED_HOSTS     允许做连接测试的主机白名单（逗号分隔）；留空=不限制
 # ---------------------------------------------------------------------------
 report:
+  # 入库门禁：true=只允许「部门审核 + 任务方审核」都通过的数据写回目标库
+  # （历史单级审核数据仍按 audit_status=1 放行）。老部署可设 false 保持旧行为。
+  inbound:
+    require-audit: ${REPORT_INBOUND_REQUIRE_AUDIT:true}
   jwt:
     secret: ${REPORT_JWT_SECRET:}
     expire-hours: ${REPORT_JWT_EXPIRE_HOURS:24}

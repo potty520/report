@@ -13,7 +13,12 @@ import java.time.temporal.TemporalAdjusters;
 /**
  * 报送周期计算（原版 job/TaskJob + SaveTaskService 里"按日/周/月/季/年算属期与时限"的部分）。
  *
- * fillingCycle：1 日报、2 周报、3 月报、4 季报、5 年报（与 sys_dict.filling_cycle 一致）
+ * fillingCycle 取值：<b>全系统唯一口径</b>，与 sys_dict.filling_cycle、前端下拉保持一致：
+ *   1 日报、2 周报、3 月报、4 季报、5 年报、6 一次性
+ *
+ * 历史缺陷：前端模板向导曾用 1月度/2季度/3半年/4年度/9一次性，而后端按 1日报/2周报/… 计算，
+ * 于是界面选「月度」实际按日报算属期和截止日、选「年度」按季报算，「一次性」落进 default 按月报算。
+ * 现在枚举只保留本类常量，写入前统一走 {@link #validate(Integer)}，前端/字典/DDL 同步对齐。
  */
 @Service
 public class PeriodService {
@@ -23,6 +28,44 @@ public class PeriodService {
     public static final int MONTHLY = 3;
     public static final int QUARTERLY = 4;
     public static final int YEARLY = 5;
+    /** 一次性任务：不参与周期子任务生成 */
+    public static final int ONE_TIME = 6;
+
+    private static final java.util.Map<Integer, String> LABELS = new java.util.LinkedHashMap<>();
+
+    static {
+        LABELS.put(DAILY, "日报");
+        LABELS.put(WEEKLY, "周报");
+        LABELS.put(MONTHLY, "月报");
+        LABELS.put(QUARTERLY, "季报");
+        LABELS.put(YEARLY, "年报");
+        LABELS.put(ONE_TIME, "一次性");
+    }
+
+    /** 周期的中文名（展示/报错用） */
+    public static String label(Integer cycle) {
+        return LABELS.getOrDefault(cycle == null ? MONTHLY : cycle, "未知周期");
+    }
+
+    /**
+     * 校验周期取值。非法值直接拒绝落库，避免字典与代码再次漂移。
+     *
+     * @throws RuntimeException 取值不在 1-6 之间
+     */
+    public static void validate(Integer cycle) {
+        if (cycle == null) {
+            throw new RuntimeException("填报周期不能为空");
+        }
+        if (!LABELS.containsKey(cycle)) {
+            throw new RuntimeException("不支持的填报周期：" + cycle
+                    + "（可选 1日报、2周报、3月报、4季报、5年报、6一次性）");
+        }
+    }
+
+    /** 是否为需要按周期自动生成子任务的主任务（一次性任务不生成） */
+    public static boolean isPeriodic(Integer cycle) {
+        return cycle != null && cycle != ONE_TIME;
+    }
 
     @Autowired
     private SysDeptMapper sysDeptMapper;
@@ -39,6 +82,7 @@ public class PeriodService {
                 return today.getYear() + "Q" + ((today.getMonthValue() - 1) / 3 + 1);
             case YEARLY:
                 return String.valueOf(today.getYear());
+            case ONE_TIME:
             default:
                 return String.format("%04d-%02d", today.getYear(), today.getMonthValue());
         }
@@ -56,6 +100,7 @@ public class PeriodService {
                 return LocalDate.of(today.getYear(), ((today.getMonthValue() - 1) / 3) * 3 + 1, 1);
             case YEARLY:
                 return LocalDate.of(today.getYear(), 1, 1);
+            case ONE_TIME:
             default:
                 return today.withDayOfMonth(1);
         }
@@ -74,6 +119,7 @@ public class PeriodService {
                 return quarterEnd;
             case YEARLY:
                 return LocalDate.of(today.getYear(), 12, 31);
+            case ONE_TIME:
             default:
                 return today.with(TemporalAdjusters.lastDayOfMonth());
         }

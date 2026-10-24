@@ -54,6 +54,8 @@ public class RptTaskService {
         RptTemplate template = rptTemplateMapper.selectById(task.getTemplateId());
         if (template == null) throw new RuntimeException("模板不存在");
         if (template.getStatus() == null || template.getStatus() != 1) throw new RuntimeException("模板未启用");
+        // 周期继承模板，并再次校验（防历史脏数据/直接改库）
+        PeriodService.validate(template.getFillingCycle());
         task.setFillingCycle(template.getFillingCycle());
         task.setStatus(0); // 草稿
         task.setAuditStatus(0); // 待审
@@ -460,6 +462,11 @@ public class RptTaskService {
 
         for (RptTask parent : parents) {
             Integer cycle = parent.getFillingCycle() == null ? PeriodService.MONTHLY : parent.getFillingCycle();
+            // 一次性任务不生成周期子任务（原先落进 default 分支按月报生成）
+            if (!PeriodService.isPeriodic(cycle)) {
+                details.add(parent.getTaskName() + ": 一次性任务，跳过周期生成");
+                continue;
+            }
             String batch = periodService.currentPeriod(cycle, java.time.LocalDate.now());
             currentBatch = batch;
 

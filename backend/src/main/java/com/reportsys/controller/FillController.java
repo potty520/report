@@ -227,11 +227,12 @@ public class FillController {
     @PostMapping("/{taskId}/commit")
     @OperLog(module = "数据填报", action = "提交入库")
     public Result<Map<String, Object>> commitToTarget(@PathVariable Long taskId,
-                                                       @RequestParam(required = false) Long dataId) {
+                                                       @RequestParam(required = false) Long dataId,
+                                                       @RequestParam(defaultValue = "false") boolean force) {
         try {
             Long userId = getCurrentUserId();
             if (userId == null) return Result.error("用户未登录");
-            return Result.success(rptTaskDataService.commitToTarget(taskId, dataId, userId));
+            return Result.success(rptTaskDataService.commitToTarget(taskId, dataId, userId, force));
         } catch (AccessDeniedException e) {
             throw e;
         } catch (RuntimeException e) {

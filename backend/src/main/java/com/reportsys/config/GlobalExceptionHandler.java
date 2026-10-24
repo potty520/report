@@ -10,7 +10,7 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import javax.validation.ConstraintViolationException;
+import jakarta.validation.ConstraintViolationException;
 
 @Slf4j
 @RestControllerAdvice
@@ -19,7 +19,16 @@ public class GlobalExceptionHandler {
     /** 安全加固：无权限统一返回 HTTP 403（此前会被下面的 Exception 分支吞成 200/系统异常） */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result<?>> handleAccessDenied(AccessDeniedException e) {
-        String msg = (e.getMessage() == null || e.getMessage().isEmpty()) ? "无权限执行该操作" : e.getMessage();
+        String msg = e.getMessage();
+        // 缺陷修复：@PreAuthorize 抛出的默认消息是英文 "Access is denied"，
+        // 中文环境下则是 Spring Security 自带的 "不允许访问"；两者都不带业务信息，
+        // 统一换成固定文案，避免中英混杂（测试报告用例 42 即为此）。
+        if (msg == null || msg.trim().isEmpty()
+                || "Access is denied".equalsIgnoreCase(msg.trim())
+                || "Access Denied".equalsIgnoreCase(msg.trim())
+                || "不允许访问".equals(msg.trim())) {
+            msg = "无权限执行该操作";
+        }
         log.warn("拒绝访问: {}", msg);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.error(403, msg));
     }

@@ -52,26 +52,46 @@ public class TemplateController {
                                                      @RequestParam(required = false) Integer status,
                                                      @RequestParam(required = false) Integer auditStatus) {
         try {
-            PageResult<RptTemplate> result = rptTemplateService.listPage(page, pageSize, templateName,
-                    status, null, null);
-            // fillingCycle和auditStatus在Service层未实现，这里做内存过滤
-            List<RptTemplate> list = result.getList();
-            if (list != null) {
-                if (fillingCycle != null) {
-                    list.removeIf(t -> !fillingCycle.equals(t.getFillingCycle()));
-                }
-                if (auditStatus != null) {
-                    list.removeIf(t -> !auditStatus.equals(t.getAuditStatus()));
-                }
-                // 模板两级授权：设置过授权的模板仅授权部门/用户可见（超级管理员不受限）
-                if (!authzService.hasAnyRole("SUPER_ADMIN")) {
-                    java.util.Set<Long> allowed = templateAuthService.accessibleTemplateIds(getCurrentUserId());
-                    list.removeIf(t -> !allowed.contains(t.getId()));
-                }
+            // 周期筛选支持两种写法：数字（1-6，新前端）与历史枚举名（DAILY/MONTHLY，旧前端）
+            Integer cycle = parseFillingCycle(fillingCycle);
+            // 模板两级授权：设置过授权的模板仅授权部门/用户可见（超级管理员不受限）。
+            // 授权范围必须下推到 SQL，否则分页 total 会包含无权模板、翻页丢行。
+            java.util.Collection<Long> allowedIds = null;
+            if (!authzService.hasAnyRole("SUPER_ADMIN")) {
+                allowedIds = templateAuthService.accessibleTemplateIds(getCurrentUserId());
             }
+            PageResult<RptTemplate> result = rptTemplateService.listPage(page, pageSize, templateName,
+                    status, null, null, cycle, auditStatus, allowedIds);
             return Result.success(result);
         } catch (Exception e) {
             return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 解析填报周期参数：支持 1-6 数字，也兼容旧前端的 DAILY/WEEKLY/MONTHLY/QUARTERLY/YEARLY/ONE_TIME。
+     *
+     * @return null 表示不筛选
+     */
+    private Integer parseFillingCycle(String raw) {
+        if (raw == null || raw.trim().isEmpty()) return null;
+        String value = raw.trim().toUpperCase();
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException ignored) {
+            // 继续按枚举名解析
+        }
+        switch (value) {
+            case "DAILY": return 1;
+            case "WEEKLY": return 2;
+            case "MONTHLY": return 3;
+            case "QUARTERLY": return 4;
+            case "YEARLY": return 5;
+            case "ONE_TIME":
+            case "ONCE":
+                return 6;
+            default:
+                throw new RuntimeException("不支持的填报周期：" + raw);
         }
     }
 

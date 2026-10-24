@@ -9,6 +9,7 @@ import type { TrajectoryNode } from '@/services/api';
 
 const NODE_COLORS: Record<string, string> = {
   SUBMIT: 'blue',
+  AUDIT: 'orange',
   DEPT_AUDIT: 'orange',
   TASK_AUDIT: 'green',
   CORRECT: 'red',

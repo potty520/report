@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, Upload, Alert, Typography, message, App,
 } from 'antd';
@@ -7,8 +7,8 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useFillStore } from '@/stores/useFillStore';
-import { getTemplateFieldsApi, uploadFillFileApi } from '@/services/api';
-import type { FillTaskItem, TemplateField } from '@/services/api';
+import { getTemplateFieldsApi, uploadFillFileApi, getMyAssignedTasksApi } from '@/services/api';
+import type { FillTaskItem, TemplateField, AssignedTaskItem } from '@/services/api';
 import dayjs from 'dayjs';
 
 /**
@@ -62,12 +62,37 @@ const FillTaskPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [fillForm] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  // 已分派但还没有填报记录的任务（用于补全「首次填报」入口）
+  const [assignedTasks, setAssignedTasks] = useState<AssignedTaskItem[]>([]);
 
   const readOnly = currentStatus === 1;
 
   const doFetch = useCallback(() => {
     fetchTaskList({ current: 1, size: 10 });
+    getMyAssignedTasksApi({ current: 1, size: 200 })
+      .then((res) => setAssignedTasks(res.data.data.list || []))
+      .catch(() => setAssignedTasks([]));
   }, [fetchTaskList]);
+
+  /** 已有填报记录的任务 + 仅分派未填报的任务，合并成一张列表 */
+  const rows = useMemo<FillTaskItem[]>(() => {
+    const records = (taskList || []) as FillTaskItem[];
+    const recorded = new Set(records.map((r) => r.taskId));
+    const pending = assignedTasks
+      .filter((t) => !recorded.has(t.id))
+      .map((t) => ({
+        id: 0,
+        taskId: t.id,
+        templateId: t.templateId,
+        taskName: t.taskName,
+        templateName: t.templateName,
+        status: 0,
+        pending: true,
+        createTime: undefined,
+        submitTime: undefined,
+      } as FillTaskItem));
+    return [...records, ...pending];
+  }, [taskList, assignedTasks]);
 
   useEffect(() => {
     doFetch();
@@ -95,7 +120,14 @@ const FillTaskPage: React.FC = () => {
     setFieldsLoading(true);
     try {
       // 详情接口：GET /fill/task/{taskId}
-      const detail = await fetchFillDetail(record.taskId);
+      // 首次填报时后端还没有该任务的数据记录，会返回「未找到填报数据」，
+      // 这里不能当成失败——按空表单继续，模板字段仍可从任务上取到。
+      let detail: any = null;
+      try {
+        detail = await fetchFillDetail(record.taskId);
+      } catch {
+        detail = null;
+      }
       setCurrentStatus(detail?.status ?? record.status ?? 0);
       setFileUrl(detail?.fileUrl ?? record.fileUrl);
       setFileName(detail?.fileName || record.fileName || '');
@@ -204,12 +236,14 @@ const FillTaskPage: React.FC = () => {
   };
 
   const columns: ColumnsType<FillTaskItem> = [
-    { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
+    { title: 'ID', dataIndex: 'id', width: 70, align: 'center', render: (v: number) => (v ? v : '-') },
     { title: '任务名称', dataIndex: 'taskName', width: 200, render: (v: string) => v || '-' },
     { title: '模板', dataIndex: 'templateName', width: 150, render: (v: string) => v || '-' },
     {
       title: '状态', dataIndex: 'status', width: 90, align: 'center',
-      render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || '-'}</Tag>,
+      render: (v: number, record: FillTaskItem) => (record.pending
+        ? <Tag color="orange">未填报</Tag>
+        : <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || '-'}</Tag>),
     },
     {
       title: '填报时间', dataIndex: 'createTime', width: 170,
@@ -245,8 +279,8 @@ const FillTaskPage: React.FC = () => {
       </div>
       <Table
         columns={columns}
-        dataSource={taskList}
-        rowKey="id"
+        dataSource={rows}
+        rowKey={(r) => (r.id ? `d-${r.id}` : `t-${r.taskId}`)}
         loading={taskLoading}
         scroll={{ x: 900 }}
         onChange={(pagination) => fetchTaskList({ current: pagination.current, size: pagination.pageSize })}

@@ -116,10 +116,12 @@ const TodoPage: React.FC = () => {
   return (
     <div style={{ padding: 24, background: '#fff', borderRadius: 8 }}>
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><Card size="small"><Statistic title="待办" value={summary.todoCount ?? 0} valueStyle={{ color: '#1677ff' }} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="已办" value={summary.doneCount ?? 0} valueStyle={{ color: '#3f8600' }} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="今日" value={summary.todayCount ?? 0} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="超期" value={summary.overdueCount ?? 0} valueStyle={{ color: '#cf1322' }} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="待办" value={summary.todoCount ?? 0} valueStyle={{ color: '#1677ff' }} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="待填" value={summary.fillTodo ?? 0} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="待审" value={summary.auditTodo ?? 0} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="已办" value={summary.doneCount ?? 0} valueStyle={{ color: '#3f8600' }} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="未读消息" value={summary.unreadCount ?? 0} /></Card></Col>
+        <Col span={4}><Card size="small"><Statistic title="超期" value={summary.overdueCount ?? 0} valueStyle={{ color: '#cf1322' }} /></Card></Col>
       </Row>
 
       <Space style={{ marginBottom: 12 }} wrap>
