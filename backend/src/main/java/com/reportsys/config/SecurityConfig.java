@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.reportsys.common.Result;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
@@ -40,6 +41,23 @@ public class SecurityConfig {
 
     @Resource
     private JwtAuthFilter jwtAuthFilter;
+
+    /**
+     * 关闭 JwtAuthFilter 的「容器自动注册」。
+     *
+     * 该类带 @Component 且实现 Filter，Spring Boot 会把它作为 Servlet 过滤器再注册一次：
+     * - 打 jar 运行（内嵌 Tomcat）时表现为过滤器被重复执行（幂等，不容易发现）；
+     * - 打 war 部署到外部 Tomcat 时，容器会对已存在的实例做注解处理，
+     *   遇到 @Resource 就去 JNDI 找 "JwtAuthFilter/jwtTokenUtil"，直接抛
+     *   NameNotFoundException，导致 Context 启动失败。
+     * 这里禁掉容器注册，仅保留 Security 过滤器链里的那一次。
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthFilter> jwtAuthFilterRegistration(JwtAuthFilter filter) {
+        FilterRegistrationBean<JwtAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {

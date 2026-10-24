@@ -13,11 +13,14 @@
     <groupId>com.reportsys</groupId>
     <artifactId>report-system</artifactId>
     <version>1.0.0</version>
+    <packaging>${packaging.type}</packaging>
     <name>report-system</name>
     <description>填报系统 - 含授权系统和组织架构管理</description>
 
     <properties>
         <java.version>17</java.version>
+        <!-- 默认打可执行 jar；mvn -Pwar package 打成 war 供外部 Tomcat 部署 -->
+        <packaging.type>jar</packaging.type>
         <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <druid.version>1.2.28</druid.version>
         <!-- Spring Boot 3.5.16 管理的版本仍滞后，这里钉到当前已修复的补丁版本 -->
@@ -175,4 +178,40 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>war</id>
+            <properties>
+                <packaging.type>war</packaging.type>
+            </properties>
+            <dependencies>
+                <!-- 外部容器提供 Tomcat，不打进 war -->
+                <dependency>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-tomcat</artifactId>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-war-plugin</artifactId>
+                        <configuration>
+                            <failOnMissingWebXml>false</failOnMissingWebXml>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <!-- war 交给外部 Tomcat 启动，不做 Boot 可执行包重写 -->
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
+

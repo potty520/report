@@ -227,6 +227,22 @@ java -jar target/report-system-1.0.0.jar
 
 生产环境通过受保护的环境文件、systemd `EnvironmentFile` 或容器 Secret 注入配置，不要把口令写入 JAR 或 Git。
 
+
+### 外部 Tomcat 部署（可选）
+
+若必须部署到独立 Tomcat（中间件白名单等场景），用 war profile 打包：
+
+```bash
+cd backend
+mvn -Pwar clean package        # 产出 target/report-system-1.0.0.war
+cp target/report-system-1.0.0.war $CATALINA_HOME/webapps/api.war
+```
+
+- 只能用 **Tomcat 10.1.x**（Boot 3 是 Jakarta 命名空间，Tomcat 9 不兼容）；
+- war 文件名决定 context path，命名为 `api.war` 才能保持 `/api/**` 不变；
+- `server.servlet.context-path` 在外部容器下不生效；
+- 完整步骤与踩坑记录见 `docs/交付物/Tomcat部署说明.md`。
+
 ### 前端
 
 ```bash

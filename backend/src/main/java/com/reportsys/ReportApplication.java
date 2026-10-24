@@ -3,6 +3,8 @@ package com.reportsys;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.TimeZone;
@@ -10,7 +12,7 @@ import java.util.TimeZone;
 @SpringBootApplication
 @EnableScheduling
 @MapperScan("com.reportsys.dao")
-public class ReportApplication {
+public class ReportApplication extends SpringBootServletInitializer {
 
     /**
      * 统一 JVM 默认时区为东八区。
@@ -29,5 +31,14 @@ public class ReportApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(ReportApplication.class, args);
+    }
+
+    /**
+     * 外部 Tomcat 部署入口（mvn -Pwar package 打出的 war 用）。
+     * 以 jar 方式运行时不会走到这里，两种打包方式可共存。
+     */
+    @Override
+    protected SpringApplicationBuilder configure(SpringApplicationBuilder builder) {
+        return builder.sources(ReportApplication.class);
     }
 }
