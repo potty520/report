@@ -271,6 +271,23 @@ server {
 
 生产环境必须启用 HTTPS。MySQL 端口不得直接暴露到公网。
 
+## 部署
+
+生产部署步骤见 `docs/交付物/部署文档-CentOS7.9.pdf`。构建机（需 JDK 17 / Maven / Node）上执行一键脚本：
+
+```bash
+./deploy/deploy_from_master.sh                 # 构建 master → 上传 → 重启 → 健康检查 → 校验
+./deploy/deploy_from_master.sh --build-only    # 只构建，不动服务器
+./deploy/deploy_from_master.sh --ref v1.0.1    # 指定分支 / Tag / 提交
+```
+
+脚本流程：拉取指定提交 → `mvn package` + `npm run build` → 生成 `BUILD_INFO.txt`（含 jar sha256）
+→ scp 上传 → 备份旧包为 `report-api.prev.jar` → 切换重启 → 健康检查（失败自动回滚）
+→ 校验远端与本地 sha256 一致。
+
+环境变量可覆盖目标机与端口：`TARGET_HOST`、`TARGET_USER`、`APP_DIR`（默认 `/opt/report`）、
+`SERVICE`（默认 `report`）、`API_PORT`（8763）、`WEB_PORT`（8080）。
+
 ## 测试
 
 ### 后端
@@ -323,7 +340,7 @@ Authorization: Bearer <JWT>
 2. 所有凭据通过部署环境变量或 Secret 管理服务注入。
 3. `REPORT_CAPTCHA_FIXED_CODE` 仅用于测试，生产环境必须为空。
 4. 必须配置 `REPORT_DS_TEST_ALLOWED_HOSTS`，避免任意主机连接测试。
-5. 必须启用 HTTPS，并限制数据库、Redis和管理端口的网络访问。
+5. 政务外网由前置网关终结 TLS；本机仅监听内网，并限制数据库、Redis 和管理端口的网络访问。
 6. 定期轮换数据库账号、JWT 密钥和管理员口令。
 7. 审计日志应设置保留周期、访问控制和完整性保护。
 8. 备份文件必须加密并限制访问。
@@ -342,12 +359,13 @@ Authorization: Bearer <JWT>
 
 ## 分支说明
 
-- `master`：稳定主线
-- `fix/functional-contracts-20261020`：本轮功能契约、权限菜单、审计和状态展示修复分支
+- `master`：稳定主线（Spring Boot 3.5 + 业务修复 + 依赖安全升级）
+- `fix/boot3-and-security`：本轮修复分支，已合并
 
 ## 文档
 
-- `docs/`：数据库、部署与历史审计资料
+- `docs/交付物/`：部署文档、操作手册、测试报告、SCA 报告（最新版）
+- `docs/`：数据库建表与升级脚本
 - `backend/src/main/resources/schema.sql`：数据库结构参考
 - `backend/src/main/resources/schema_patch.sql`：增量结构参考
 
