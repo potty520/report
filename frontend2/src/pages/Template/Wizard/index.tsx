@@ -30,13 +30,19 @@ interface WizardField {
 }
 
 const FIELD_TYPES = ['VARCHAR', 'CHAR', 'INT', 'BIGINT', 'DECIMAL', 'DATE', 'DATETIME', 'TEXT'];
+// 与后端 PeriodService 保持一致（1日报 2周报 3月报 4季报 5年报 6一次性），
+// 历史上前端用的是 1月度/2季度/3半年/4年度/9一次性，和后端计算口径冲突，已统一。
 const CYCLE_OPTIONS = [
-  { value: 1, label: '月度' },
-  { value: 2, label: '季度' },
-  { value: 3, label: '半年' },
-  { value: 4, label: '年度' },
-  { value: 9, label: '一次性' },
+  { value: 1, label: '日报' },
+  { value: 2, label: '周报' },
+  { value: 3, label: '月报' },
+  { value: 4, label: '季报' },
+  { value: 5, label: '年报' },
+  { value: 6, label: '一次性' },
 ];
+
+/** 新建模板默认「月报」：最常见口径，避免误选日报导致当天就超期 */
+const DEFAULT_CYCLE = 3;
 
 let seq = 0;
 const nextKey = () => `wf-${Date.now()}-${seq++}`;
@@ -66,7 +72,7 @@ export default function TemplateWizard() {
   const [info, setInfo] = useState({
     templateName: '',
     templateCode: '',
-    fillingCycle: 1,
+    fillingCycle: DEFAULT_CYCLE,
     description: '',
   });
   const [materialize, setMaterialize] = useState({ datasourceId: undefined as number | undefined, tableName: '', doIt: false, recreate: false });
@@ -94,7 +100,7 @@ export default function TemplateWizard() {
         setInfo({
           templateName: t.templateName || t.name || '',
           templateCode: t.templateCode || t.code || '',
-          fillingCycle: Number(t.fillingCycle ?? 1),
+          fillingCycle: Number(t.fillingCycle ?? DEFAULT_CYCLE),
           description: t.description || '',
         });
         setMaterialize({
@@ -368,7 +374,7 @@ export default function TemplateWizard() {
             <Button key="detail" onClick={() => navigate(`/template/detail/${done.id}`)}>查看模板详情</Button>,
             <Button key="again" onClick={() => {
               setDone(null); setCurrent(0); setFields([]); setHeaders([]);
-              setInfo({ templateName: '', templateCode: '', fillingCycle: 1, description: '' });
+              setInfo({ templateName: '', templateCode: '', fillingCycle: DEFAULT_CYCLE, description: '' });
               setMaterialize({ datasourceId: undefined, tableName: '', doIt: false, recreate: false });
             }}>再建一个</Button>,
           ]}

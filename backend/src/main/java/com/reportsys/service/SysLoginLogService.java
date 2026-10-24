@@ -7,7 +7,7 @@ import com.reportsys.dao.SysLoginLogMapper;
 import com.reportsys.model.SysLoginLog;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @Service
 public class SysLoginLogService {

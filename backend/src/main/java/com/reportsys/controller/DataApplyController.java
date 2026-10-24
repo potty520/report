@@ -39,21 +39,59 @@ public class DataApplyController {
     }
 
     /**
-     * 提交申请
+     * 提交申请。
+     *
+     * 缺陷修复：前端提交 {taskId,title,reason,dataScope} 的 JSON，后端原来只接受
+     * @RequestParam taskId+reason，导致界面提交必然 400/500（「系统异常」）。
+     * 现在同时兼容 JSON body 与 query 参数。
      */
     @PostMapping
-    public Result<Void> apply(@RequestParam Long taskId,
-                               @RequestParam String reason) {
+    public Result<Void> apply(@RequestBody(required = false) RptDataApply body,
+                               @RequestParam(required = false) Long taskId,
+                               @RequestParam(required = false) String reason) {
         try {
             Long userId = getCurrentUserId();
             if (userId == null) {
                 return Result.error("用户未登录");
             }
-            RptDataApply apply = new RptDataApply();
-            apply.setTaskId(taskId);
+            RptDataApply apply = body != null ? body : new RptDataApply();
+            if (apply.getTaskId() == null) apply.setTaskId(taskId);
+            if (apply.getReason() == null || apply.getReason().trim().isEmpty()) apply.setReason(reason);
+            if (apply.getTaskId() == null) {
+                return Result.error("请选择关联任务");
+            }
             apply.setApplicantId(userId);
-            apply.setReason(reason);
             rptDataApplyService.apply(apply);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 修改本人待审批的申请 */
+    @PutMapping("/{id}")
+    public Result<Void> update(@PathVariable Long id, @RequestBody RptDataApply body) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptDataApplyService.updateOwn(id, body, userId);
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 删除本人待审批的申请 */
+    @DeleteMapping("/{id}")
+    public Result<Void> delete(@PathVariable Long id) {
+        try {
+            Long userId = getCurrentUserId();
+            if (userId == null) return Result.error("用户未登录");
+            rptDataApplyService.deleteOwn(id, userId);
             return Result.success();
         } catch (AccessDeniedException e) {
             throw e;

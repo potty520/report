@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Button, Space, Tag, Modal, Form, Input, message, Popconfirm, App,
+  Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm, App,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useDataApplyStore } from '@/stores/useDataApplyStore';
+import { getMyAssignedTasksApi, getTaskListApi } from '@/services/api';
 import type { DataApplyItem, DataApplyFormParams } from '@/services/api';
 import dayjs from 'dayjs';
 
@@ -18,6 +19,28 @@ const DataApplyPage: React.FC = () => {
   const [modalTitle, setModalTitle] = useState('新增申请');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useState<Record<string, any>>({});
+  // 可申请的任务：优先「我分派到的任务」，管理员没有分派时退回全部任务
+  const [taskOptions, setTaskOptions] = useState<{ value: number; label: string }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const mine = await getMyAssignedTasksApi({ current: 1, size: 200 });
+        const list = mine.data.data?.list || [];
+        if (list.length) {
+          setTaskOptions(list.map((t) => ({ value: t.id, label: t.taskName })));
+          return;
+        }
+      } catch { /* 无分派则继续尝试任务列表 */ }
+      try {
+        const all = await getTaskListApi({ current: 1, size: 200 });
+        const list = all.data.data?.list || [];
+        setTaskOptions(list.map((t: any) => ({ value: t.id, label: t.name || t.taskName })));
+      } catch {
+        setTaskOptions([]);
+      }
+    })();
+  }, []);
 
   const doFetch = useCallback((params: Record<string, any> = {}) => {
     fetchApplyList({ current: 1, size: 10, ...params });
@@ -50,6 +73,7 @@ const DataApplyPage: React.FC = () => {
     setEditingId(record.id);
     setModalTitle('编辑申请');
     editForm.setFieldsValue({
+      taskId: record.taskId,
       title: record.title,
       reason: record.reason,
       dataScope: record.dataScope,
@@ -94,7 +118,8 @@ const DataApplyPage: React.FC = () => {
 
   const columns: ColumnsType<DataApplyItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
-    { title: '申请标题', dataIndex: 'title', width: 200 },
+    { title: '申请标题', dataIndex: 'title', width: 180, render: (v: string) => v || '-' },
+    { title: '关联任务', dataIndex: 'taskName', width: 160, render: (v: string) => v || '-' },
     { title: '申请原因', dataIndex: 'reason', width: 200, ellipsis: true },
     { title: '数据范围', dataIndex: 'dataScope', width: 150, render: (v: string) => v || '-' },
     { title: '申请人', dataIndex: 'applicantName', width: 120 },
@@ -173,6 +198,14 @@ const DataApplyPage: React.FC = () => {
         width={550}
       >
         <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="taskId" label="关联任务" rules={[{ required: true, message: '请选择关联任务' }]}>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder="请选择要申请数据的任务"
+              options={taskOptions}
+            />
+          </Form.Item>
           <Form.Item name="title" label="申请标题" rules={[{ required: true, message: '请输入申请标题' }]}>
             <Input placeholder="请输入申请标题" />
           </Form.Item>

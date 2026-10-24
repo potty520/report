@@ -184,11 +184,12 @@ const TemplateAdd = () => {
               rules={[{ required: true, message: '请选择填报周期' }]}
             >
               <Select placeholder="请选择填报周期">
-                <Option value="DAILY">每日</Option>
-                <Option value="WEEKLY">每周</Option>
-                <Option value="MONTHLY">每月</Option>
-                <Option value="QUARTERLY">每季</Option>
-                <Option value="YEARLY">每年</Option>
+                <Option value={1}>每日</Option>
+                <Option value={2}>每周</Option>
+                <Option value={3}>每月</Option>
+                <Option value={4}>每季</Option>
+                <Option value={5}>每年</Option>
+                <Option value={6}>一次性</Option>
               </Select>
             </Form.Item>
             <Row gutter={16}>

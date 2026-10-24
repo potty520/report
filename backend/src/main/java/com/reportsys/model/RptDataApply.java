@@ -12,6 +12,10 @@ public class RptDataApply {
     private Long taskId;
     private Long applicantId;
     private Long applicantDeptId;
+    /** 申请标题（前端表单字段，早期只存 reason 导致标题丢失） */
+    private String title;
+    /** 数据范围说明 */
+    private String dataScope;
     private String reason;
     private Integer status;
     private Long auditorId;
@@ -28,4 +32,14 @@ public class RptDataApply {
     private String applicantDeptName;
     @TableField(exist = false)
     private String auditorName;
+
+    // ---- 兼容前端既有字段名（前端用 applyTime/approverName/approveTime/approveRemark） ----
+    @TableField(exist = false)
+    private String applyTime;
+    @TableField(exist = false)
+    private String approverName;
+    @TableField(exist = false)
+    private String approveTime;
+    @TableField(exist = false)
+    private String approveRemark;
 }

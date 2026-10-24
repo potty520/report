@@ -1,7 +1,7 @@
 package com.reportsys.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.reportsys.dao.SysMenuMapper;
 import com.reportsys.dao.SysRoleMenuMapper;
 import com.reportsys.model.SysMenu;
@@ -9,7 +9,7 @@ import com.reportsys.model.SysRoleMenu;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;

@@ -155,12 +155,36 @@ public class RptTemplateService {
      */
     public PageResult<RptTemplate> listPage(int pageNum, int pageSize, String templateName, Integer status,
                                             Long deptId, Long projectId) {
+        return listPage(pageNum, pageSize, templateName, status, deptId, projectId, null, null, null);
+    }
+
+    /**
+     * 分页查询模板（筛选条件全部下推到 SQL）。
+     *
+     * 缺陷修复：原先 fillingCycle / auditStatus / 模板授权是在 Controller 里对**已分页的 list**
+     * 做 removeIf，一是 total/pages 与 list 不一致（翻页会丢数据），二是
+     * {@code String.equals(Integer)} 恒为 false —— 只要传周期筛选，列表必空。
+     *
+     * @param allowedIds 可见模板范围；null=不限制（超管），空集合=无可见模板
+     */
+    public PageResult<RptTemplate> listPage(int pageNum, int pageSize, String templateName, Integer status,
+                                            Long deptId, Long projectId,
+                                            Integer fillingCycle, Integer auditStatus,
+                                            java.util.Collection<Long> allowedIds) {
         Page<RptTemplate> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<RptTemplate> wrapper = new LambdaQueryWrapper<>();
         if (StrUtil.isNotBlank(templateName)) wrapper.like(RptTemplate::getTemplateName, templateName);
         if (status != null) wrapper.eq(RptTemplate::getStatus, status);
         if (deptId != null) wrapper.eq(RptTemplate::getDeptId, deptId);
         if (projectId != null) wrapper.eq(RptTemplate::getProjectId, projectId);
+        if (fillingCycle != null) wrapper.eq(RptTemplate::getFillingCycle, fillingCycle);
+        if (auditStatus != null) wrapper.eq(RptTemplate::getAuditStatus, auditStatus);
+        if (allowedIds != null) {
+            if (allowedIds.isEmpty()) {
+                return PageResult.of(new java.util.ArrayList<>(), pageNum, pageSize, 0);
+            }
+            wrapper.in(RptTemplate::getId, allowedIds);
+        }
         wrapper.orderByDesc(RptTemplate::getCreateTime);
         PageResult<RptTemplate> result = PageResult.of(rptTemplateMapper.selectPage(page, wrapper));
         fillExtInfo(result.getList());
@@ -208,6 +232,8 @@ public class RptTemplateService {
         RptTemplate exist = rptTemplateMapper.selectOne(
                 Wrappers.<RptTemplate>lambdaQuery().eq(RptTemplate::getTemplateCode, template.getTemplateCode()));
         if (exist != null) throw new RuntimeException("模板编码已存在");
+        // 周期取值统一校验（原先前端传什么就落什么，导致「月度」被当成「日报」执行）
+        PeriodService.validate(template.getFillingCycle());
         template.setCreateTime(LocalDateTime.now());
         template.setStatus(0); // 草稿
         template.setAuditStatus(0); // 待审
@@ -246,6 +272,10 @@ public class RptTemplateService {
     @Transactional
     public void update(RptTemplate template, List<RptTemplateField> fields) {
         if (template.getId() == null) throw new RuntimeException("模板ID不能为空");
+        // 周期取值统一校验；仅在前端显式传了周期时校验（PUT 局部更新场景）
+        if (template.getFillingCycle() != null) {
+            PeriodService.validate(template.getFillingCycle());
+        }
         template.setUpdateTime(LocalDateTime.now());
         rptTemplateMapper.updateById(template);
 

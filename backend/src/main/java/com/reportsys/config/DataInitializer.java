@@ -4,7 +4,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 //@Component  // 数据已通过SQL初始化，注释掉避免重复插入
 // 注意：本类当前未被 Spring 装配（上面的 @Component 已注释），以下内容仅作为"初始数据/结构"的

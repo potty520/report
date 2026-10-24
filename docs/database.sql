@@ -164,7 +164,7 @@ CREATE TABLE rpt_template (
     id              BIGINT        NOT NULL AUTO_INCREMENT COMMENT '模板ID',
     template_name   VARCHAR(64)   NOT NULL COMMENT '模板名称',
     template_code   VARCHAR(32)   NOT NULL COMMENT '模板编码',
-    filling_cycle   TINYINT       NOT NULL COMMENT '填报周期 (1日报 6周报 2月报 4季报 3年报 5一次性)',
+    filling_cycle   TINYINT       NOT NULL COMMENT '填报周期 (1日报 2周报 3月报 4季报 5年报 6一次性)',
     dept_id         BIGINT        DEFAULT NULL COMMENT '所属部门ID',
     project_id      BIGINT        DEFAULT NULL COMMENT '所属项目ID',
     file_url        VARCHAR(256)  DEFAULT '' COMMENT '模板Excel文件路径',

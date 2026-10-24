@@ -125,6 +125,7 @@ INSERT IGNORE INTO sys_dict (dict_type, dict_code, dict_label, sort) VALUES
   ('filling_cycle', '3', '月报', 3),
   ('filling_cycle', '4', '季报', 4),
   ('filling_cycle', '5', '年报', 5),
+('filling_cycle', '6', '一次性', 6),
   ('task_status', '0', '草稿', 1),
   ('task_status', '1', '已发布', 2),
   ('task_status', '2', '填报中', 3),

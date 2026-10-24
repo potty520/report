@@ -113,12 +113,14 @@ const TemplateList = () => {
     NOT_SUBMIT: { color: 'default', text: '未提交' },
   };
 
+  // 与后端 PeriodService 一致：1日报 2周报 3月报 4季报 5年报 6一次性
   const fillingCycleMap = {
-    DAILY: '日',
-    WEEKLY: '周',
-    MONTHLY: '月',
-    QUARTERLY: '季',
-    YEARLY: '年',
+    1: '日',
+    2: '周',
+    3: '月',
+    4: '季',
+    5: '年',
+    6: '一次性',
   };
 
   const columns = [
@@ -206,11 +208,12 @@ const TemplateList = () => {
           </Form.Item>
           <Form.Item name="fillingCycle">
             <Select placeholder="填报周期" allowClear style={{ width: 130 }}>
-              <Option value="DAILY">日</Option>
-              <Option value="WEEKLY">周</Option>
-              <Option value="MONTHLY">月</Option>
-              <Option value="QUARTERLY">季</Option>
-              <Option value="YEARLY">年</Option>
+              <Option value={1}>日</Option>
+              <Option value={2}>周</Option>
+              <Option value={3}>月</Option>
+              <Option value={4}>季</Option>
+              <Option value={5}>年</Option>
+              <Option value={6}>一次性</Option>
             </Select>
           </Form.Item>
           <Form.Item name="status">

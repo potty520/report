@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS rpt_template (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     template_name VARCHAR(64) NOT NULL,
     template_code VARCHAR(32) NOT NULL,
-    filling_cycle TINYINT NOT NULL,
+    filling_cycle TINYINT NOT NULL COMMENT '填报周期 1日报 2周报 3月报 4季报 5年报 6一次性',
     dept_id BIGINT,
     project_id BIGINT,
     file_url VARCHAR(256) DEFAULT '',
@@ -222,6 +222,8 @@ CREATE TABLE IF NOT EXISTS rpt_task_data (
 CREATE TABLE IF NOT EXISTS rpt_data_apply (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     task_id BIGINT NOT NULL,
+    title VARCHAR(128) DEFAULT '',
+    data_scope VARCHAR(256) DEFAULT '',
     applicant_id BIGINT NOT NULL,
     applicant_dept_id BIGINT,
     reason VARCHAR(256) DEFAULT '',
