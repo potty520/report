@@ -9,8 +9,6 @@ backend/data/
 *.trace.db
 
 # Node
-frontend/node_modules/
-frontend/dist/
 frontend2/node_modules/
 frontend2/dist/
 
