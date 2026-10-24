@@ -85,9 +85,9 @@
 
 | 层级 | 技术 |
 | --- | --- |
-| 后端 | Java 8、Spring Boot 2.7、Spring Security、JWT、MyBatis-Plus 3.5 |
+| 后端 | Java 17、Spring Boot 3.5、Spring Security 6、JWT、MyBatis-Plus 3.5 |
 | 前端 | React 18、Vite 5、Ant Design 5、React Router 6、Zustand、ECharts 5 |
-| 数据库 | MySQL 8.0 |
+| 数据库 | MySQL 5.7+ / 8.0 |
 | 文件存储 | 本地文件系统，可扩展对象存储 |
 | 反向代理 | Nginx |
 | 测试 | JUnit 5、Mockito、AssertJ、TypeScript、Vite Build |
@@ -122,15 +122,15 @@ report/
 └── README.md
 ```
 
-`frontend/` 为旧版前端遗留目录；当前维护和生产构建入口为 `frontend2/`。
+生产构建入口为 `frontend2/`（旧版 umi 前端已移除）。交付文档见 `docs/交付物/`。
 
 ## 环境要求
 
-- JDK 8
+- JDK 17
 - Maven 3.8+
 - Node.js 18+
 - npm 9+
-- MySQL 8.0
+- MySQL 5.7+ / 8.0
 - Nginx 1.20+（生产部署）
 
 ## 配置项

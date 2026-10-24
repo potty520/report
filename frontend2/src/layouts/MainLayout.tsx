@@ -125,7 +125,7 @@ const MainLayout: React.FC = () => {
                 style={{ cursor: 'pointer', marginRight: 20, fontSize: 18 }}
                 onClick={() => navigate('/todo')}
               >
-                <Badge count={summary.todoCount ?? 0} size="small" offset={[2, -2]}>
+                <Badge count={summary.unreadCount ?? summary.todoCount ?? 0} size="small" offset={[2, -2]}>
                   <BellOutlined />
                 </Badge>
               </span>

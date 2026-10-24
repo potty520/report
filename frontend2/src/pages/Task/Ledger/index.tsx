@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Table, Card, Row, Col, Statistic, Tabs, Button, Space, App, Progress } from 'antd';
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ReloadOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useLedgerStore } from '@/stores/useLedgerStore';
-import { exportLedgerApi } from '@/services/api';
+import { exportLedgerApi, commitTaskDataApi } from '@/services/api';
 import { handleDownload } from '@/utils/download';
 
 /**
@@ -19,6 +19,23 @@ const LedgerPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [exporting, setExporting] = useState(false);
+  const [committing, setCommitting] = useState<number | null>(null);
+
+  /** 入库：把该任务下已审核通过的数据写回目标业务库（原先界面无入口，只能调接口） */
+  const doCommit = async (taskId: number) => {
+    setCommitting(taskId);
+    try {
+      const res: any = await commitTaskDataApi(taskId);
+      const d = res?.data?.data || {};
+      msg.success(`入库完成：写入 ${d.rows ?? 0} 行，影响 ${d.affected ?? 0} 行${d.skippedInbound ? `，跳过已入库 ${d.skippedInbound} 条` : ''}`);
+      fetchRates();
+      if (activeType) fetchView(activeType, page, pageSize);
+    } catch (e: any) {
+      msg.error(e?.response?.data?.msg || e?.message || '入库失败');
+    } finally {
+      setCommitting(null);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -32,7 +49,7 @@ const LedgerPage: React.FC = () => {
 
   const columns: ColumnsType<Record<string, any>> = useMemo(() => {
     const entries = Object.entries(view.headers || {});
-    return entries.map(([key, label]) => ({
+    const cols: ColumnsType<Record<string, any>> = entries.map(([key, label]) => ({
       title: label,
       dataIndex: key,
       key,
@@ -45,7 +62,23 @@ const LedgerPage: React.FC = () => {
         return String(value);
       },
     }));
-  }, [view.headers]);
+    // 任务维度台账增加「入库」操作（只有 hostTaskTotal 的 id 才是任务ID）
+    if (activeType === 'hostTaskTotal') {
+      cols.push({
+        title: '操作', key: 'action', width: 120, fixed: 'right',
+        render: (_: any, row: any) => (
+          <Button
+            type="link" size="small" icon={<CloudUploadOutlined />}
+            loading={committing === row.id}
+            onClick={() => doCommit(Number(row.id))}
+          >
+            入库
+          </Button>
+        ),
+      });
+    }
+    return cols;
+  }, [view.headers, activeType, committing]);
 
   const doExport = async () => {
     if (!activeType) return;

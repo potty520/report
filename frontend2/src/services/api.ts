@@ -378,6 +378,21 @@ export interface FillTaskItem {
   fileName?: string;
   submitTime?: string;
   createTime?: string;
+  /** 仅前端使用：该行来自「已分派任务」但还没有任何填报记录 */
+  pending?: boolean;
+}
+
+/** 我被分派的填报任务（含尚未保存草稿、从未填报过的任务） */
+export interface AssignedTaskItem {
+  id: number;
+  taskName: string;
+  templateId: number;
+  templateName?: string;
+  status?: number;
+  belongTime?: string;
+  fillDeadline?: string;
+  totalCount?: number;
+  fillCount?: number;
 }
 
 /** 填报详情（GET /fill/task/{taskId}，后端注释即「填报详情(通过taskId)」） */
@@ -422,6 +437,8 @@ export interface AuditFormParams {
 // ==================== Data Apply ====================
 export interface DataApplyItem {
   id: number;
+  taskId?: number;
+  taskName?: string;
   title: string;
   reason: string;
   dataScope: string;
@@ -434,6 +451,7 @@ export interface DataApplyItem {
 }
 
 export interface DataApplyFormParams {
+  taskId: number;
   title: string;
   reason: string;
   dataScope: string;
@@ -1002,6 +1020,16 @@ export async function getFillTaskListApi(params: PageParams) {
   return request.get<ApiResponse<PageResult<FillTaskItem>>>('/fill/task/page', { params });
 }
 
+/**
+ * 我被分派的任务（含从未填报过的）。
+ *
+ * 缺陷修复：「我的填报任务」页原先只查 /fill/task/page（rpt_task_data），
+ * 从未保存过草稿的任务不会出现，新分派的任务在界面上完全没有入口（鸡生蛋问题）。
+ */
+export async function getMyAssignedTasksApi(params: PageParams) {
+  return request.get<ApiResponse<PageResult<AssignedTaskItem>>>('/fill/my-assigned', { params });
+}
+
 export async function getFillTaskDetailApi(taskId: number) {
   // 后端：GET /fill/task/{taskId}，按 taskId 查当前用户在该任务下的填报数据
   return request.get<ApiResponse<FillDetail>>(`/fill/task/${taskId}`);
@@ -1021,6 +1049,17 @@ export async function submitFillDataApi(data: FillSubmitParams) {
   // 后端 POST /fill/submit：@RequestParam taskId / dataJson / fileUrl
   return request.post<ApiResponse<null>>('/fill/submit', toFormBody(data), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+}
+
+/**
+ * 把已审核通过的填报数据写回目标业务库（入库）。
+ *
+ * 界面上原先没有任何入口，只能手工调接口；台账页「入库」按钮走这里。
+ */
+export async function commitTaskDataApi(taskId: number, dataId?: number, force = false) {
+  return request.post<ApiResponse<any>>(`/fill/${taskId}/commit`, null, {
+    params: { dataId, force },
   });
 }
 
@@ -1071,7 +1110,8 @@ export async function getDataApplyDetailApi(id: number) {
 }
 
 export async function createDataApplyApi(data: DataApplyFormParams) {
-  return request.post<ApiResponse<null>>('/dataApply/', data);
+  // 后端已改为接收 JSON body（taskId/title/reason/dataScope），末尾不再带斜杠
+  return request.post<ApiResponse<null>>('/dataApply', data);
 }
 
 export async function updateDataApplyApi(id: number, data: DataApplyFormParams) {
@@ -1330,8 +1370,15 @@ export async function downloadFileApi(id: number) {
 // ==================== P1-F / P2-G 待办 / 字典 / 数据范围 / 审计日志 ====================
 
 export interface TodoSummary {
+  /** 真实待办数 = 待填 + 待审 + 待批（不再是未读消息数） */
   todoCount?: number;
+  fillTodo?: number;
+  auditTodo?: number;
+  applyTodo?: number;
   doneCount?: number;
+  /** 未读站内消息数（顶栏红点用这个） */
+  unreadCount?: number;
+  readCount?: number;
   todayCount?: number;
   overdueCount?: number;
   [key: string]: any;

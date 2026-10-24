@@ -90,6 +90,14 @@ public class MaterializeService {
                 exists = false;
             }
             if (!exists) {
+                // 没有主键字段时物化表只能 insert，无法 upsert：重复入库会产生重复行，
+                // 这里显式告警，避免「模板没标主键」在联调阶段被忽略。
+                boolean hasKey = fields.stream()
+                        .anyMatch(f -> f.getIsKey() != null && f.getIsKey() == 1);
+                if (!hasKey) {
+                    log.warn("模板 {} 未配置主键字段，物化表 {} 只能追加写入，重复入库可能产生重复行",
+                            template.getId(), table);
+                }
                 String ddl = DialectSupport.createTable(dialect, ds.getDbName(), table, fields);
                 log.info("物化建表: {}", ddl);
                 st.executeUpdate(ddl);
