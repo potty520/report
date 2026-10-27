@@ -1,14 +1,29 @@
-import React, { useEffect, useMemo } from 'react';
-import { Card, Statistic, Row, Col, Spin } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, Statistic, Row, Col, Spin, Table } from 'antd';
 import {
   FileTextOutlined, CheckCircleOutlined, ClockCircleOutlined,
   ExclamationCircleOutlined, TeamOutlined, RiseOutlined,
 } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react';
 import { useOverviewStore } from '@/stores/useOverviewStore';
+import {
+  getTaskMakeStatsApi, getFillTaskStatsApi, getDeptFinishRankApi, getDeptIssueRankApi,
+} from '@/services/api';
 
 const OverviewPage: React.FC = () => {
   const { stats, chartData, trendData, loading, fetchStats, fetchChartData, fetchTrend } = useOverviewStore();
+
+  const [makeStats, setMakeStats] = useState<Record<string, number>>({});
+  const [fillStats, setFillStats] = useState<Record<string, number>>({});
+  const [finishRank, setFinishRank] = useState<any[]>([]);
+  const [issueRank, setIssueRank] = useState<any[]>([]);
+
+  useEffect(() => {
+    getTaskMakeStatsApi().then((r: any) => setMakeStats(r?.data || {})).catch(() => {});
+    getFillTaskStatsApi().then((r: any) => setFillStats(r?.data || {})).catch(() => {});
+    getDeptFinishRankApi().then((r: any) => setFinishRank(r?.data || [])).catch(() => {});
+    getDeptIssueRankApi().then((r: any) => setIssueRank(r?.data || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchStats();
@@ -195,6 +210,57 @@ const OverviewPage: React.FC = () => {
           <Col span={24}>
             <Card>
               <ReactEChartsCore option={trendOption} style={{ height: 350 }} />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* R-12 手册四类统计 */}
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24} lg={12}>
+            <Card size="small" title="任务制定统计">
+              <Row gutter={16}>
+                <Col span={8}><Statistic title="制定任务总数" value={makeStats.taskCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="生成填报任务" value={makeStats.subTaskCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="涉及部门" value={makeStats.deptCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="已完成" value={makeStats.doneCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="待完成" value={makeStats.todoCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="超期" value={makeStats.overdueCount ?? 0} /></Col>
+              </Row>
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card size="small" title="填报任务统计">
+              <Row gutter={16}>
+                <Col span={8}><Statistic title="任务执行总数" value={fillStats.execCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="任务下发部门" value={fillStats.deptCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="已完成" value={fillStats.doneCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="待完成" value={fillStats.todoCount ?? 0} /></Col>
+                <Col span={8}><Statistic title="超期" value={fillStats.overdueCount ?? 0} /></Col>
+              </Row>
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card size="small" title="部门完成排行">
+              <Table
+                size="small" rowKey="deptName" pagination={false} dataSource={finishRank}
+                columns={[
+                  { title: '部门', dataIndex: 'deptName', render: (v: string) => v || '-' },
+                  { title: '任务数', dataIndex: 'total', width: 100 },
+                  { title: '已完成', dataIndex: 'finished', width: 100 },
+                ]}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card size="small" title="部门下发排行">
+              <Table
+                size="small" rowKey="deptName" pagination={false} dataSource={issueRank}
+                columns={[
+                  { title: '部门', dataIndex: 'deptName', render: (v: string) => v || '-' },
+                  { title: '下发任务', dataIndex: 'issued', width: 100 },
+                  { title: '已完成', dataIndex: 'finished', width: 100 },
+                ]}
+              />
             </Card>
           </Col>
         </Row>
