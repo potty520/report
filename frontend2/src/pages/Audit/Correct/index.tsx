@@ -6,6 +6,7 @@ import { SearchOutlined, ReloadOutlined, EditOutlined, StopOutlined } from '@ant
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useAuditStore } from '@/stores/useAuditStore';
+import { getCorrectItemsApi, addCorrectItemApi, deleteCorrectItemApi } from '@/services/api';
 import TaskSelector from '@/components/TaskSelector';
 import type { AuditDataItem, CorrectBatch } from '@/services/api';
 
@@ -29,6 +30,47 @@ const CorrectPage: React.FC = () => {
   const [closeOpen, setCloseOpen] = useState(false);
   const [startForm] = Form.useForm();
   const [closeForm] = Form.useForm();
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const [items, setItems] = useState<any[]>([]);
+  const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+
+  const openItems = async (batchId: number) => {
+    try {
+      setCurrentBatchId(batchId);
+      const res: any = await getCorrectItemsApi(batchId);
+      setItems(res?.data || []);
+      setItemsOpen(true);
+    } catch {
+      msg.error('加载补正明细失败');
+    }
+  };
+
+  const addItem = async (opType: number) => {
+    if (!currentBatchId) return;
+    const rowKey = window.prompt('明细行标识（目标表主键值）') || '';
+    const after = window.prompt('新值 JSON，例如 {"amount": 100}') || '{}';
+    const before = window.prompt('原值 JSON（可为空）') || '';
+    try {
+      const res: any = await addCorrectItemApi(currentBatchId, { opType, rowKey, afterJson: after, beforeJson: before });
+      if (res?.code === 200) {
+        msg.success('已添加');
+        openItems(currentBatchId);
+      } else {
+        msg.error(res?.msg || '添加失败');
+      }
+    } catch (e: any) {
+      msg.error(e?.response?.data?.msg || '添加失败');
+    }
+  };
+
+  const removeItem = async (itemId: number) => {
+    try {
+      await deleteCorrectItemApi(itemId);
+      if (currentBatchId) openItems(currentBatchId);
+    } catch {
+      msg.error('删除失败');
+    }
+  };
 
   const loadTask = async (id: number) => {
     try {
@@ -101,6 +143,12 @@ const CorrectPage: React.FC = () => {
       render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     { title: '说明', dataIndex: 'comment', ellipsis: true, render: (v) => v || '-' },
+    {
+      title: '操作', key: 'action', width: 90,
+      render: (_: any, r: any) => (
+        <Button size="small" type="link" onClick={() => openItems(r.id)}>明细</Button>
+      ),
+    },
   ];
 
   const hasOngoing = correctBatches.some((b) => b.status === 1);
@@ -161,6 +209,27 @@ const CorrectPage: React.FC = () => {
             <Input.TextArea rows={4} placeholder="例如：金额与凭证不一致，请核对后重新提交" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title="补正明细" open={itemsOpen} onCancel={() => setItemsOpen(false)} footer={null} width={860}>
+        <Space style={{ marginBottom: 12 }}>
+          <Button size="small" onClick={() => addItem(1)}>新增行</Button>
+          <Button size="small" onClick={() => addItem(2)}>修改行</Button>
+          <Button size="small" danger onClick={() => addItem(3)}>删除行</Button>
+        </Space>
+        <Table
+          rowKey="id"
+          size="small"
+          dataSource={items}
+          pagination={false}
+          columns={[
+            { title: '类型', dataIndex: 'opType', width: 90, render: (v: number) => ({ 1: '新增', 2: '修改', 3: '删除' } as Record<number, string>)[v] || v },
+            { title: '行标识', dataIndex: 'rowKey', width: 140 },
+            { title: '原值', dataIndex: 'beforeJson', ellipsis: true },
+            { title: '新值', dataIndex: 'afterJson', ellipsis: true },
+            { title: '操作', width: 80, render: (_: any, r: any) => <Button size="small" danger onClick={() => removeItem(r.id)}>删除</Button> },
+          ]}
+        />
       </Modal>
 
       <Modal title="关闭补正" open={closeOpen} onOk={closeCorrect} onCancel={() => setCloseOpen(false)} destroyOnClose>
