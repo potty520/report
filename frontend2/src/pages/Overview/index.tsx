@@ -21,8 +21,8 @@ const OverviewPage: React.FC = () => {
   useEffect(() => {
     getTaskMakeStatsApi().then((r: any) => setMakeStats(r?.data || {})).catch(() => {});
     getFillTaskStatsApi().then((r: any) => setFillStats(r?.data || {})).catch(() => {});
-    getDeptFinishRankApi().then((r: any) => setFinishRank(r?.data || [])).catch(() => {});
-    getDeptIssueRankApi().then((r: any) => setIssueRank(r?.data || [])).catch(() => {});
+    getDeptFinishRankApi().then((r: any) => setFinishRank(Array.isArray(r?.data) ? r.data : (r?.data?.list || []))).catch(() => {});
+    getDeptIssueRankApi().then((r: any) => setIssueRank(Array.isArray(r?.data) ? r.data : (r?.data?.list || []))).catch(() => {});
   }, []);
 
   useEffect(() => {
