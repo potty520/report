@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Table, Button, Space, Tag, App, Card, Row, Col, Statistic, Modal, Form, Input, InputNumber, Tabs, Badge,
+  Switch, Table, Button, Space, Tag, App, Card, Row, Col, Statistic, Modal, Form, Input, InputNumber, Tabs, Badge,
 } from 'antd';
 import { ReloadOutlined, CheckOutlined, NotificationOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -24,6 +24,7 @@ const TodoPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [readFlag, setReadFlag] = useState<number | undefined>(undefined);
   const [remindOpen, setRemindOpen] = useState(false);
+  const [todayOnly, setTodayOnly] = useState(false);
   const [form] = Form.useForm();
 
   const load = useCallback((p = page, s = pageSize, flag = readFlag) => {
@@ -79,6 +80,10 @@ const TodoPage: React.FC = () => {
     }
   };
 
+  const shownList = todayOnly
+    ? (list as any[]).filter((m) => m.createTime && dayjs(m.createTime).isSame(dayjs(), 'day'))
+    : list;
+
   const columns: ColumnsType<TodoMessage> = [
     {
       title: '状态', dataIndex: 'readFlag', width: 80, align: 'center',
@@ -129,6 +134,7 @@ const TodoPage: React.FC = () => {
       </Row>
 
       <Space style={{ marginBottom: 12 }} wrap>
+        <Switch checked={todayOnly} onChange={setTodayOnly} checkedChildren="今日待办" unCheckedChildren="全部" />
         <Button icon={<ReloadOutlined />} onClick={() => { fetchSummary(); load(); }}>刷新</Button>
         <Button type="primary" icon={<CheckOutlined />} onClick={handleReadAll}>全部已读</Button>
         <Button icon={<NotificationOutlined />} onClick={() => { form.resetFields(); setRemindOpen(true); }}>发起催办</Button>
@@ -147,7 +153,7 @@ const TodoPage: React.FC = () => {
 
       <Table
         columns={columns}
-        dataSource={list}
+        dataSource={shownList}
         rowKey="id"
         loading={loading}
         size="small"
