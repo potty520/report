@@ -65,6 +65,14 @@ const TaskAuditPage: React.FC = () => {
     }
   };
 
+  const handleDownload = (url?: any) => {
+    if (!url) {
+      (window as any).alert('暂无可下载的文件');
+      return;
+    }
+    window.open(url, '_blank');
+  };
+
   const columns: ColumnsType<AuditDataItem> = [
     { title: 'ID', dataIndex: 'id', width: 70, align: 'center' },
     { title: '任务名称', dataIndex: 'taskName', width: 200, render: (v) => v || '-' },
@@ -90,6 +98,7 @@ const TaskAuditPage: React.FC = () => {
             <Button type="link" size="small" danger icon={<CloseOutlined />} disabled={notDeptPassed || done}
               title={notDeptPassed ? '需部门审核通过后才能进行任务方审核' : undefined}
               onClick={() => openAudit(record, false)}>驳回</Button>
+            <Button type="link" size="small" onClick={() => handleDownload((record as any).fileUrl)} disabled={!(record as any).fileUrl}>报表</Button>
             <Button type="link" size="small" icon={<NodeIndexOutlined />}
               onClick={() => navigate(`/audit/trajectory?taskId=${record.taskId}`)}>轨迹</Button>
           </Space>

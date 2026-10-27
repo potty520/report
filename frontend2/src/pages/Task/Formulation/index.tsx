@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { getReturnedTasksApi, handleReturnedTaskApi } from '@/services/api';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, DatePicker, message, Popconfirm, App,
 } from 'antd';
@@ -16,6 +17,8 @@ const TaskFormulationPage: React.FC = () => {
   const [searchForm] = Form.useForm();
   const [editForm] = Form.useForm();
   const [modalOpen, setModalOpen] = useState(false);
+  const [returnedOpen, setReturnedOpen] = useState(false);
+  const [returned, setReturned] = useState<any[]>([]);
   const [modalTitle, setModalTitle] = useState('新增任务');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useState<Record<string, any>>({});
@@ -136,6 +139,41 @@ const TaskFormulationPage: React.FC = () => {
     2: { color: 'red', text: '已关闭' },
   };
 
+  const loadReturned = async () => {
+    try {
+      const res: any = await getReturnedTasksApi({ page: 1, pageSize: 50 });
+      setReturned(res?.data?.list || []);
+      setReturnedOpen(true);
+    } catch (e: any) {
+      message.error(e?.response?.data?.msg || '加载被退回任务失败');
+    }
+  };
+
+  const handleReturned = async (taskId: number, action: 'revoke' | 'resubmit' | 'change-dept') => {
+    let reason = '';
+    let deptId: number | undefined;
+    if (action === 'change-dept') {
+      const v = window.prompt('请输入新的填报部门 ID');
+      if (!v) return;
+      deptId = Number(v);
+    } else {
+      reason = window.prompt('请填写操作原因（必填）') || '';
+      if (!reason.trim()) return;
+    }
+    try {
+      const res: any = await handleReturnedTaskApi(taskId, action, { deptId, reason: reason || undefined });
+      if (res?.code === 200) {
+        message.success('操作成功');
+        loadReturned();
+        doFetch();
+      } else {
+        message.error(res?.msg || '操作失败');
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.msg || '操作失败');
+    }
+  };
+
   const columns: ColumnsType<TaskItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
     { title: '任务名称', dataIndex: 'name', width: 200 },
@@ -203,6 +241,7 @@ const TaskFormulationPage: React.FC = () => {
         </Form>
       </div>
       <div className="table-operations">
+        <Button onClick={loadReturned}>被退回任务</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增任务</Button>
       </div>
       <Table
@@ -264,6 +303,30 @@ const TaskFormulationPage: React.FC = () => {
             <Input.TextArea rows={3} placeholder="任务描述" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title="被退回任务" open={returnedOpen} footer={null} onCancel={() => setReturnedOpen(false)} width={760}>
+        <Table
+          rowKey="id"
+          dataSource={returned}
+          pagination={false}
+          size="small"
+          columns={[
+            { title: '任务', dataIndex: 'taskName' },
+            { title: '部门', dataIndex: 'deptName', width: 120 },
+            { title: '退回原因', dataIndex: 'returnReason', ellipsis: true },
+            {
+              title: '操作', width: 220,
+              render: (_: any, r: any) => (
+                <Space>
+                  <Button size="small" danger onClick={() => handleReturned(r.id, 'revoke')}>撤销</Button>
+                  <Button size="small" onClick={() => handleReturned(r.id, 'change-dept')}>变更部门</Button>
+                  <Button size="small" type="primary" onClick={() => handleReturned(r.id, 'resubmit')}>重新提交</Button>
+                </Space>
+              ),
+            },
+          ]}
+        />
       </Modal>
     </div>
   );
