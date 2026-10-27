@@ -86,6 +86,25 @@ public class QualityReportService {
         return out;
     }
 
+    /** 质量报告结论：PASS / FAIL / null（R-06） */
+    public String checkResult(Long taskDataId) {
+        try {
+            List<String> rows = jdbcTemplate.queryForList(
+                    "SELECT check_result FROM rpt_quality_report WHERE task_data_id = ?", String.class, taskDataId);
+            return rows.isEmpty() ? null : rows.get(0);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 结论为不合格时，只允许驳回（R-06，不受 required 开关影响） */
+    public void assertCanApprove(Long taskDataId) {
+        String result = checkResult(taskDataId);
+        if ("FAIL".equalsIgnoreCase(result)) {
+            throw new RuntimeException("质量报告结论为不合格，只能驳回，不能审核通过");
+        }
+    }
+
     /** 审核前校验（required=false 时直接放行） */
     public void assertCanAudit(Long taskDataId) {
         if (!required) return;
@@ -122,17 +141,18 @@ public class QualityReportService {
         try {
             List<Long> exists = jdbcTemplate.queryForList(
                     "SELECT id FROM rpt_quality_report WHERE task_data_id = ?", Long.class, taskDataId);
+            String checkResult = QualityReportClient.STATUS_PASS.equalsIgnoreCase(result.getStatus()) ? "PASS" : "FAIL";
             if (exists.isEmpty()) {
                 jdbcTemplate.update("INSERT INTO rpt_quality_report (task_data_id, task_id, template_id, provider, "
-                                + "status, report_id, report_url, message, create_by, create_time, update_time) "
-                                + "VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())",
+                                + "status, check_result, report_id, report_url, message, create_by, create_time, update_time) "
+                                + "VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())",
                         taskDataId, data.getTaskId(), data.getTemplateId(), providerName,
-                        result.getStatus(), result.getReportId(), result.getReportUrl(),
+                        result.getStatus(), checkResult, result.getReportId(), result.getReportUrl(),
                         StrUtil.maxLength(StrUtil.nullToEmpty(result.getMessage()), 500), userId);
             } else {
-                jdbcTemplate.update("UPDATE rpt_quality_report SET provider=?, status=?, report_id=?, report_url=?, "
-                                + "message=?, update_time=NOW() WHERE task_data_id=?",
-                        providerName, result.getStatus(), result.getReportId(), result.getReportUrl(),
+                jdbcTemplate.update("UPDATE rpt_quality_report SET provider=?, status=?, check_result=?, report_id=?, "
+                                + "report_url=?, message=?, update_time=NOW() WHERE task_data_id=?",
+                        providerName, result.getStatus(), checkResult, result.getReportId(), result.getReportUrl(),
                         StrUtil.maxLength(StrUtil.nullToEmpty(result.getMessage()), 500), taskDataId);
             }
         } catch (Exception e) {

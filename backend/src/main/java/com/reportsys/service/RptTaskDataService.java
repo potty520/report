@@ -833,6 +833,7 @@ public class RptTaskDataService {
         // 质检拦截（可插拔）：report.quality.required=true 时，未通过质检不允许审核
         // （对应原版「报告未生成不可审核」）；默认 false，不影响现有流程。
         qualityReportService.assertCanAudit(dataId);
+        if (pass) qualityReportService.assertCanApprove(dataId);
         authz.assertCanAudit(data.getTaskId(), data.getFillUserId(), auditorId);
         if (data.getTaskAuditStatus() != null && data.getTaskAuditStatus() != 0) {
             throw new RuntimeException("任务方已审核，请勿重复操作");

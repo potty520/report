@@ -5,6 +5,8 @@ import com.reportsys.common.Result;
 import com.reportsys.model.RptTemplate;
 import com.reportsys.model.RptTemplateField;
 import com.reportsys.service.RptTemplateService;
+import com.reportsys.service.TemplateDisplayService;
+import com.reportsys.model.RptTemplateDisplayConfig;
 import com.reportsys.service.TemplateAuthService;
 import com.reportsys.service.AuthzService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,8 @@ public class TemplateController {
 
     @Autowired
     private RptTemplateService rptTemplateService;
+    @Autowired
+    private TemplateDisplayService templateDisplayService;
 
     @Autowired
     private TemplateAuthService templateAuthService;
@@ -357,6 +361,51 @@ public class TemplateController {
     /**
      * 获取当前用户ID
      */
+
+    /** R-01 查询展示信息配置 */
+    @GetMapping("/{id}/display-config")
+    public Result<Map<String, Object>> displayConfig(@PathVariable Long id) {
+        try {
+            return Result.success(templateDisplayService.getConfig(id));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-01 保存展示信息配置 */
+    @PostMapping("/{id}/display-config")
+    public Result<Void> saveDisplayConfig(@PathVariable Long id, @RequestBody RptTemplateDisplayConfig cfg) {
+        try {
+            cfg.setTemplateId(id);
+            templateDisplayService.save(cfg, getCurrentUserId());
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-01 关联表链接检测 */
+    @PostMapping("/display/link-test")
+    public Result<Map<String, Object>> linkTest(@RequestBody Map<String, Object> body) {
+        try {
+            Long dsId = body.get("datasourceId") == null ? null : Long.valueOf(String.valueOf(body.get("datasourceId")));
+            return Result.success(templateDisplayService.linkTest(dsId, String.valueOf(body.get("tableName"))));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-08 字段与数据库列绑定 */
+    @PostMapping("/{id}/bind-columns")
+    public Result<Void> bindColumns(@PathVariable Long id, @RequestBody List<Map<String, Object>> binds) {
+        try {
+            rptTemplateService.bindColumns(id, binds);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof Long) {

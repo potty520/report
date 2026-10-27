@@ -5,6 +5,8 @@ import com.reportsys.common.Result;
 import com.reportsys.model.RptTask;
 import com.reportsys.model.RptTaskAssign;
 import com.reportsys.service.RptTaskService;
+import com.reportsys.service.TaskReturnService;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +25,8 @@ public class TaskController {
 
     @Autowired
     private RptTaskService rptTaskService;
+    @Autowired
+    private TaskReturnService taskReturnService;
 
     /**
      * 分页列表
@@ -234,6 +238,67 @@ public class TaskController {
     /**
      * 获取当前用户ID
      */
+
+    // ==================== R-03 / R-04 / R-05 任务退回与处理 ====================
+
+    /** R-03 分派人退回（未分派任务） */
+    @PostMapping("/{id}/return")
+    public Result<Void> returnTask(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        try {
+            taskReturnService.returnByAssigner(id, getCurrentUserId(), str(body, "reason"));
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 制定人的被退回任务列表 */
+    @GetMapping("/returned")
+    public Result<Map<String, Object>> returned(@RequestParam(defaultValue = "1") int page,
+                                                @RequestParam(defaultValue = "10") int pageSize) {
+        try {
+            return Result.success(taskReturnService.listReturned(getCurrentUserId(), page, pageSize));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 退回记录 */
+    @GetMapping("/{id}/return-detail")
+    public Result<Map<String, Object>> returnDetail(@PathVariable Long id) {
+        try {
+            return Result.success(taskReturnService.detail(id));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-05 撤销 / 变更部门 / 重新提交 */
+    @PutMapping("/{id}/{action}")
+    public Result<Void> handleReturn(@PathVariable Long id, @PathVariable String action,
+                                     @RequestParam(required = false) Long deptId,
+                                     @RequestBody(required = false) Map<String, Object> body) {
+        if (!"revoke".equals(action) && !"change-dept".equals(action) && !"resubmit".equals(action)) {
+            return Result.error("不支持的操作");
+        }
+        try {
+            String act = "change-dept".equals(action) ? "changeDept" : action;
+            taskReturnService.handle(id, act, deptId, getCurrentUserId(), str(body, "reason"));
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    private String str(Map<String, Object> body, String key) {
+        Object v = body == null ? null : body.get(key);
+        return v == null ? null : String.valueOf(v);
+    }
+
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof Long) {

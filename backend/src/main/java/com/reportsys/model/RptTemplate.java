@@ -26,6 +26,8 @@ public class RptTemplate {
     private Long createBy;
     /** 是否已物化到目标数据源（P0-A） */
     private Integer materialized;
+    /** 物化类型 1新增表 2关联已有表（R-08） */
+    private Integer materializeType;
     private LocalDateTime materializedTime;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

@@ -4,6 +4,10 @@ import com.reportsys.common.PageResult;
 import com.reportsys.common.Result;
 import com.reportsys.model.RptTaskData;
 import com.reportsys.service.RptTaskDataService;
+import com.reportsys.service.FillActionService;
+import com.reportsys.service.TaskReturnService;
+import com.reportsys.service.TemplateDisplayService;
+import com.reportsys.service.ImportCheckService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -28,6 +32,16 @@ public class FillController {
 
     @Autowired
     private RptTaskDataService rptTaskDataService;
+    @Autowired
+    private FillActionService fillActionService;
+    @Autowired
+    private TaskReturnService taskReturnService;
+    @Autowired
+    private TemplateDisplayService templateDisplayService;
+    @Autowired
+    private ImportCheckService importCheckService;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     @Autowired
     private com.reportsys.service.FileStorageService fileStorageService;
     @Autowired
@@ -282,6 +296,59 @@ public class FillController {
     /**
      * 获取当前用户ID
      */
+
+    // ==================== R-02 无更新提交 / R-04 填报退回 / R-01 参考数据 ====================
+
+    /** R-02 无更新提交 */
+    @PostMapping("/no-update")
+    public Result<Void> noUpdate(@RequestBody Map<String, Object> body) {
+        try {
+            Long taskId = body.get("taskId") == null ? null : Long.valueOf(String.valueOf(body.get("taskId")));
+            Object reason = body.get("reason");
+            fillActionService.noUpdate(taskId, reason == null ? null : String.valueOf(reason), getCurrentUserId());
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-04 填报人退回未提交任务 */
+    @PostMapping("/{taskId}/return")
+    public Result<Void> returnTask(@PathVariable Long taskId, @RequestBody(required = false) Map<String, Object> body) {
+        try {
+            Object reason = body == null ? null : body.get("reason");
+            taskReturnService.returnByFiller(taskId, getCurrentUserId(), reason == null ? null : String.valueOf(reason));
+            return Result.success();
+        } catch (AccessDeniedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-01 填报页参考数据（只读） */
+    @GetMapping("/{taskId}/reference")
+    public Result<Map<String, Object>> reference(@PathVariable Long taskId,
+                                                 @RequestParam(required = false) Long deptId) {
+        try {
+            return Result.success(templateDisplayService.reference(taskId, deptId));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-09 导入校验记录 */
+    @GetMapping("/{taskId}/import-checks")
+    public Result<Map<String, Object>> importChecks(@PathVariable Long taskId) {
+        try {
+            return Result.success(importCheckService.list(taskId));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof Long) {

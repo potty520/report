@@ -17,6 +17,9 @@ public class RptTaskData {
     private String fileUrl;
     private String fileName;
     private Integer status;
+    /** 无更新提交 0否 1是（R-02） */
+    private Integer noUpdate;
+    private String noUpdateReason;
     private LocalDateTime submitTime;
     private Integer auditStatus;
     private String auditComment;

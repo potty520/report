@@ -368,4 +368,43 @@ public class RptTemplateService {
         return rptTemplateMapper.selectList(
                 Wrappers.<RptTemplate>lambdaQuery().eq(RptTemplate::getStatus, 1));
     }
+    /**
+     * R-08 关联已有表：把模板字段绑定到目标库的列。
+     * binds: [{fieldId, dbColumn}]；存在未映射/重复映射时拒绝。
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public void bindColumns(Long templateId, java.util.List<java.util.Map<String, Object>> binds) {
+        if (templateId == null) throw new IllegalArgumentException("缺少模板ID");
+        java.util.List<com.reportsys.model.RptTemplateField> fields =
+                rptTemplateFieldMapper.selectList(com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .<com.reportsys.model.RptTemplateField>lambdaQuery()
+                        .eq(com.reportsys.model.RptTemplateField::getTemplateId, templateId));
+        if (fields.isEmpty()) throw new IllegalStateException("模板没有字段");
+        if (binds == null || binds.isEmpty()) throw new IllegalStateException("请至少映射一个字段");
+        java.util.Set<String> used = new java.util.HashSet<>();
+        java.util.Set<Long> mapped = new java.util.HashSet<>();
+        for (java.util.Map<String, Object> b : binds) {
+            Object fid = b.get("fieldId");
+            Object col = b.get("dbColumn");
+            if (fid == null || col == null || String.valueOf(col).trim().isEmpty()) continue;
+            Long fieldId = Long.valueOf(String.valueOf(fid));
+            String column = String.valueOf(col).trim();
+            if (!used.add(column.toLowerCase())) {
+                throw new IllegalStateException("数据库列被重复映射: " + column);
+            }
+            mapped.add(fieldId);
+            com.reportsys.model.RptTemplateField f = new com.reportsys.model.RptTemplateField();
+            f.setId(fieldId);
+            f.setDbColumn(column);
+            rptTemplateFieldMapper.updateById(f);
+        }
+        if (mapped.size() != fields.size()) {
+            throw new IllegalStateException("存在未映射字段，请完成全部字段映射（" + mapped.size() + "/" + fields.size() + "）");
+        }
+        com.reportsys.model.RptTemplate tpl = new com.reportsys.model.RptTemplate();
+        tpl.setId(templateId);
+        tpl.setMaterializeType(2);
+        rptTemplateMapper.updateById(tpl);
+    }
+
 }

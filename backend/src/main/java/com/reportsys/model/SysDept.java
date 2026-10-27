@@ -17,6 +17,8 @@ public class SysDept {
     private String phone;
     private Integer sort;
     private Integer status;
+    /** 是否填报部门 0否 1是（R-10） */
+    private Integer isFillDept;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

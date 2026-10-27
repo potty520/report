@@ -4,6 +4,7 @@ import com.reportsys.common.Result;
 import com.reportsys.model.SysDept;
 import com.reportsys.model.SysProject;
 import com.reportsys.service.SysProjectService;
+import com.reportsys.service.OrgFeatureService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +19,8 @@ public class ProjectController {
 
     @Autowired
     private SysProjectService sysProjectService;
+    @Autowired
+    private OrgFeatureService orgFeatureService;
 
     /**
      * 项目树(按部门分组)
@@ -100,4 +103,37 @@ public class ProjectController {
             return Result.error(e.getMessage());
         }
     }
+    /** R-15 发布（停用 → 启用） */
+    @PutMapping("/{id}/publish")
+    public Result<Void> publish(@PathVariable Long id) {
+        try {
+            orgFeatureService.publishProject(id);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-15 关闭（带引用校验） */
+    @PutMapping("/{id}/close")
+    public Result<Void> close(@PathVariable Long id) {
+        try {
+            orgFeatureService.closeProject(id);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-15 删除（带子项目与引用校验） */
+    @DeleteMapping("/{id}/checked")
+    public Result<Void> deleteChecked(@PathVariable Long id) {
+        try {
+            orgFeatureService.deleteProject(id);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
 }

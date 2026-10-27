@@ -7,7 +7,8 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useFillStore } from '@/stores/useFillStore';
-import { getTemplateFieldsApi, uploadFillFileApi, getMyAssignedTasksApi } from '@/services/api';
+import { getTemplateFieldsApi, uploadFillFileApi, getMyAssignedTasksApi,
+  noUpdateSubmitApi, returnFillTaskApi } from '@/services/api';
 import type { FillTaskItem, TemplateField, AssignedTaskItem } from '@/services/api';
 import dayjs from 'dayjs';
 
@@ -235,6 +236,38 @@ const FillTaskPage: React.FC = () => {
     1: { color: 'green', text: '已提交' },
   };
 
+  const [reasonModal, setReasonModal] = useState<{ open: boolean; type: 'noUpdate' | 'return'; record?: FillTaskItem }>(
+    { open: false, type: 'noUpdate' },
+  );
+  const [reasonText, setReasonText] = useState('');
+
+  const openReason = (type: 'noUpdate' | 'return', record: FillTaskItem) => {
+    setReasonText('');
+    setReasonModal({ open: true, type, record });
+  };
+
+  const submitReason = async () => {
+    const record = reasonModal.record;
+    if (!record) return;
+    if (!reasonText.trim()) {
+      message.warning('请填写说明');
+      return;
+    }
+    try {
+      if (reasonModal.type === 'noUpdate') {
+        await noUpdateSubmitApi(record.taskId as number, reasonText.trim());
+        message.success('已提交无更新说明');
+      } else {
+        await returnFillTaskApi(record.taskId as number, reasonText.trim());
+        message.success('已退回');
+      }
+      setReasonModal({ open: false, type: 'noUpdate' });
+      doFetch();
+    } catch (e: any) {
+      message.error(e?.response?.data?.msg || e?.message || '操作失败');
+    }
+  };
+
   const columns: ColumnsType<FillTaskItem> = [
     { title: 'ID', dataIndex: 'id', width: 70, align: 'center', render: (v: number) => (v ? v : '-') },
     { title: '任务名称', dataIndex: 'taskName', width: 200, render: (v: string) => v || '-' },
@@ -254,7 +287,7 @@ const FillTaskPage: React.FC = () => {
       render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '操作', key: 'action', width: 140, fixed: 'right',
+      title: '操作', key: 'action', width: 300, fixed: 'right',
       render: (_: any, record: FillTaskItem) => (
         <Space>
           {record.status === 1 ? (
@@ -265,6 +298,12 @@ const FillTaskPage: React.FC = () => {
             <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => handleFill(record)}>
               填报
             </Button>
+          )}
+          {record.status !== 1 && (
+            <Button size="small" onClick={() => openReason('noUpdate', record)}>无更新提交</Button>
+          )}
+          {record.status !== 1 && (
+            <Button size="small" danger onClick={() => openReason('return', record)}>退回</Button>
           )}
         </Space>
       ),
@@ -408,6 +447,29 @@ const FillTaskPage: React.FC = () => {
           </Form>
         )}
       </Modal>
+      <Modal
+        title={reasonModal.type === 'noUpdate' ? '无更新提交' : '退回任务'}
+        open={reasonModal.open}
+        onOk={submitReason}
+        onCancel={() => setReasonModal({ open: false, type: 'noUpdate' })}
+        okText="确定"
+        cancelText="取消"
+      >
+        <p style={{ color: '#999' }}>
+          {reasonModal.type === 'noUpdate'
+            ? '本期数据无变化时，可提交「无更新」说明，任务计为已填报，不产生入库数据。'
+            : '退回后该任务将回到分派人处，可重新分派。'}
+        </p>
+        <Input.TextArea
+          rows={4}
+          maxLength={200}
+          showCount
+          value={reasonText}
+          onChange={(e) => setReasonText(e.target.value)}
+          placeholder={reasonModal.type === 'noUpdate' ? '请填写无更新说明（必填，≤200 字）' : '请填写退回原因（必填，≤200 字）'}
+        />
+      </Modal>
+
     </div>
   );
 };

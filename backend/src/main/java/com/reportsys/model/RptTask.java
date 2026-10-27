@@ -16,6 +16,11 @@ public class RptTask {
     private String belongTime;
     private Integer fillingCycle;
     private Integer status;
+    /** 退回状态 0正常 1已退回制定人 2已退回分派人（R-03/R-04） */
+    private Integer returnStatus;
+    private String returnReason;
+    private Long returnBy;
+    private LocalDateTime returnTime;
     private LocalDateTime fillDeadline;
     private LocalDateTime auditDeadline;
     private Long createBy;

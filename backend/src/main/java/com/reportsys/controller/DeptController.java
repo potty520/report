@@ -3,6 +3,8 @@ package com.reportsys.controller;
 import com.reportsys.common.Result;
 import com.reportsys.model.SysDept;
 import com.reportsys.service.SysDeptService;
+import com.reportsys.service.OrgFeatureService;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +19,8 @@ public class DeptController {
 
     @Autowired
     private SysDeptService sysDeptService;
+    @Autowired
+    private OrgFeatureService orgFeatureService;
 
     /**
      * 部门树
@@ -105,4 +109,30 @@ public class DeptController {
             return Result.error(e.getMessage());
         }
     }
+    /** R-10 批量设置填报部门 */
+    @PutMapping("/fill-dept")
+    public Result<Void> setFillDept(@RequestBody Map<String, Object> body) {
+        try {
+            java.util.List<Long> ids = new java.util.ArrayList<>();
+            Object raw = body.get("deptIds");
+            if (raw instanceof java.util.List) {
+                for (Object o : (java.util.List<?>) raw) ids.add(Long.valueOf(String.valueOf(o)));
+            }
+            orgFeatureService.setFillDept(ids);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-10 仅返回填报部门 */
+    @GetMapping("/fill-list")
+    public Result<java.util.List<Map<String, Object>>> fillList() {
+        try {
+            return Result.success(orgFeatureService.listFillDept());
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
 }

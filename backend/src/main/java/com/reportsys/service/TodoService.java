@@ -159,6 +159,15 @@ public class TodoService {
         result.put("readCount", read);
         result.put("todayCount", today);
         result.put("overdueCount", overdue);
+        // R-11 手册四项口径：今日新增 / 全部待办 / 累计已办 / 今日已办
+        long todayNew = count("SELECT COUNT(*) FROM sys_message WHERE user_id = ? AND DATE(create_time) = CURDATE()", userId);
+        long todayDone = count("SELECT COUNT(*) FROM rpt_task_data d WHERE DATE(d.audit_time) = CURDATE() AND "
+                + "((d.fill_user_id = ? AND d.audit_status = 1) OR (d.audit_user_id = ? AND d.audit_status IN (1,2)))",
+                userId, userId);
+        result.put("todayNew", todayNew);
+        result.put("totalTodo", fillTodo + auditTodo + applyTodo);
+        result.put("totalDone", done);
+        result.put("todayDone", todayDone);
         return result;
     }
 

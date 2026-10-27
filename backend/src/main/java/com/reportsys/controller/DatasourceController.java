@@ -4,12 +4,14 @@ import com.reportsys.common.PageResult;
 import com.reportsys.common.Result;
 import com.reportsys.model.RptDatasource;
 import com.reportsys.service.RptDatasourceService;
+import com.reportsys.service.TemplateDisplayService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/datasource")
@@ -18,6 +20,8 @@ public class DatasourceController {
 
     @Autowired
     private RptDatasourceService rptDatasourceService;
+    @Autowired
+    private TemplateDisplayService templateDisplayService;
 
     /**
      * 分页列表
@@ -129,4 +133,24 @@ public class DatasourceController {
             return Result.error(e.getMessage());
         }
     }
+    /** R-08 数据源下的表清单 */
+    @GetMapping("/{id}/tables")
+    public Result<List<String>> tables(@PathVariable Long id) {
+        try {
+            return Result.success(templateDisplayService.listTables(id));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** R-08 表的列清单 */
+    @GetMapping("/{id}/tables/{table}/columns")
+    public Result<List<Map<String, Object>>> columns(@PathVariable Long id, @PathVariable String table) {
+        try {
+            return Result.success(templateDisplayService.listColumns(id, table));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
 }

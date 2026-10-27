@@ -1666,3 +1666,71 @@ export async function getQualityApi(taskDataId: number) {
 export async function getChannelStatusApi() {
   return request.get<ApiResponse<Record<string, any>>>('/quality/channel/status');
 }
+
+// ==================== 任务退回 / 无更新 / 参考数据（R-01 ~ R-05）====================
+
+export async function returnTaskByAssignApi(taskId: number, reason: string) {
+  return request.post<ApiResponse<void>>(`/task/${taskId}/return`, { reason });
+}
+
+export async function getReturnedTasksApi(params: PageParams = {}) {
+  return request.get<ApiResponse<Record<string, any>>>('/task/returned', { params });
+}
+
+export async function handleReturnedTaskApi(taskId: number, action: 'revoke' | 'change-dept' | 'resubmit',
+                                            params: { deptId?: number; reason?: string } = {}) {
+  return request.put<ApiResponse<void>>(`/task/${taskId}/${action}`, params.reason ? { reason: params.reason } : {},
+    { params: params.deptId ? { deptId: params.deptId } : {} });
+}
+
+export async function noUpdateSubmitApi(taskId: number, reason: string) {
+  return request.post<ApiResponse<void>>('/fill/no-update', { taskId, reason });
+}
+
+export async function returnFillTaskApi(taskId: number, reason: string) {
+  return request.post<ApiResponse<void>>(`/fill/${taskId}/return`, { reason });
+}
+
+export async function getTaskReferenceApi(taskId: number) {
+  return request.get<ApiResponse<Record<string, any>>>(`/fill/${taskId}/reference`);
+}
+
+export async function getFillDeptApi() {
+  return request.get<ApiResponse<any[]>>('/dept/fill-list');
+}
+
+export async function setFillDeptApi(deptIds: number[]) {
+  return request.put<ApiResponse<void>>('/dept/fill-dept', { deptIds });
+}
+
+export async function publishProjectApi(id: number) {
+  return request.put<ApiResponse<void>>(`/project/${id}/publish`);
+}
+
+export async function getTaskMakeStatsApi() {
+  return request.get<ApiResponse<Record<string, number>>>('/statistics/task-make');
+}
+
+export async function getDeptFinishRankApi() {
+  return request.get<ApiResponse<any[]>>('/statistics/dept-finish-rank');
+}
+
+export async function getFillTaskStatsApi() {
+  return request.get<ApiResponse<Record<string, number>>>('/statistics/fill-task');
+}
+
+export async function getDeptIssueRankApi() {
+  return request.get<ApiResponse<any[]>>('/statistics/dept-issue-rank');
+}
+
+export async function getCorrectItemsApi(correctId: number) {
+  return request.get<ApiResponse<any[]>>(`/correct/${correctId}/items`);
+}
+
+export async function addCorrectItemApi(correctId: number, data: Record<string, any>) {
+  return request.post<ApiResponse<void>>(`/correct/${correctId}/item`, data);
+}
+
+export async function deleteCorrectItemApi(itemId: number) {
+  return request.delete<ApiResponse<void>>(`/correct/item/${itemId}`);
+}
