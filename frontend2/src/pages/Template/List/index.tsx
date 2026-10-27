@@ -8,6 +8,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useTemplateStore } from '@/stores/useTemplateStore';
 import type { TemplateItem } from '@/services/api';
+import { downloadTemplateApi } from '@/services/api';
 import dayjs from 'dayjs';
 
 const TemplateListPage: React.FC = () => {
@@ -29,6 +30,23 @@ const TemplateListPage: React.FC = () => {
   useEffect(() => {
     doFetch();
   }, [doFetch]);
+
+  const handleDownload = async (record: TemplateItem) => {
+    try {
+      const res: any = await downloadTemplateApi(record.id);
+      const blob = new Blob([res?.data ?? res], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(record as any).name || (record as any).templateName || 'template'}-${record.id}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      msg.error('下载失败');
+    }
+  };
 
   const handleSearch = () => {
     const values = searchForm.getFieldsValue();
@@ -92,6 +110,7 @@ const TemplateListPage: React.FC = () => {
       render: (_: any, record: TemplateItem) => (
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/template/detail/${record.id}`)}>详情</Button>
+          <Button type="link" size="small" onClick={() => handleDownload(record)}>下载</Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/template/detail/${record.id}`)}>编辑</Button>
           <Button type="link" size="small" onClick={() => setAuthModal({ open: true, id: record.id, name: record.name })}>授权</Button>
           {record.status !== 1 && (
