@@ -5,6 +5,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, FolderOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useDeptStore } from '@/stores/useDeptStore';
+import { getFillDeptApi, setFillDeptApi } from '@/services/api';
 import type { DeptItem, DeptFormParams } from '@/services/api';
 
 const DeptPage: React.FC = () => {
@@ -16,6 +17,23 @@ const DeptPage: React.FC = () => {
   const [modalTitle, setModalTitle] = useState('新增部门');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedDept, setSelectedDept] = useState<DeptItem | null>(null);
+  const [fillDeptIds, setFillDeptIds] = useState<number[]>([]);
+
+  const loadFillDepts = useCallback(() => {
+    getFillDeptApi()
+      .then((res: any) => setFillDeptIds((res?.data || []).map((d: any) => d.id)))
+      .catch(() => setFillDeptIds([]));
+  }, []);
+
+  const saveFillDepts = async () => {
+    try {
+      const res: any = await setFillDeptApi(fillDeptIds);
+      if (res?.code === 200) msg.success('已保存填报部门');
+      else msg.error(res?.msg || '保存失败');
+    } catch (e: any) {
+      msg.error(e?.response?.data?.msg || '保存失败');
+    }
+  };
 
   const doFetch = useCallback(() => {
     fetchTree();
@@ -23,7 +41,8 @@ const DeptPage: React.FC = () => {
 
   useEffect(() => {
     doFetch();
-  }, [doFetch]);
+    loadFillDepts();
+  }, [doFetch, loadFillDepts]);
 
   // Flatten dept tree
   const flattenDepts = (depts: DeptItem[], level: number = 0): (DeptItem & { level: number })[] => {
@@ -159,6 +178,19 @@ const DeptPage: React.FC = () => {
     { title: '电话', dataIndex: 'phone', width: 130, render: (v: string) => v || '-' },
     { title: '邮箱', dataIndex: 'email', width: 180, render: (v: string) => v || '-' },
     {
+      title: '填报部门', dataIndex: 'isFillDept', width: 110, align: 'center',
+      render: (_: any, record: any) => (
+        <Switch
+          size="small"
+          checked={fillDeptIds.includes(record.id)}
+          onChange={(checked) =>
+            setFillDeptIds((prev: number[]) =>
+              checked ? Array.from(new Set([...prev, record.id])) : prev.filter((id: number) => id !== record.id))
+          }
+        />
+      ),
+    },
+    {
       title: '状态', dataIndex: 'status', width: 80, align: 'center',
       render: (v: number) => <Tag color={v === 1 ? 'green' : 'red'}>{v === 1 ? '启用' : '禁用'}</Tag>,
     },
@@ -189,6 +221,7 @@ const DeptPage: React.FC = () => {
             <Popconfirm title="确定删除该部门及子部门?" onConfirm={handleDelete} okText="确定" cancelText="取消">
               <Button danger icon={<DeleteOutlined />} disabled={!selectedDept}>删除</Button>
             </Popconfirm>
+            <Button onClick={saveFillDepts}>保存填报部门</Button>
             <Button icon={<ReloadOutlined />} onClick={doFetch}>刷新</Button>
           </Space>
         </div>
