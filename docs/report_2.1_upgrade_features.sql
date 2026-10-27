@@ -116,3 +116,8 @@ UPDATE sys_dept d
 SET d.is_fill_dept = 1
 WHERE EXISTS (SELECT 1 FROM rpt_task_assign a WHERE a.dept_id = d.id)
   AND d.is_fill_dept = 0;
+
+-- R-21 周期字典补齐「一次性」（原系统字典只有 5 项，代码支持 6=一次性）
+INSERT INTO sys_dict (dict_type, dict_code, dict_label, sort, status)
+SELECT 'filling_cycle', '6', '一次性', 6, 1
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE dict_type='filling_cycle' AND dict_code='6');

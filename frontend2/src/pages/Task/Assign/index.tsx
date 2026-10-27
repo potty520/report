@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { returnTaskByAssignApi } from '@/services/api';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, Select, Radio, message, Popconfirm, App, Transfer,
 } from 'antd';
@@ -118,7 +119,23 @@ const TaskAssignPage: React.FC = () => {
     2: { color: 'green', text: '已完成' },
   };
 
-  const columns: ColumnsType<TaskAssignItem> = [
+    const handleReturn = async (record: any) => {
+    const reason = window.prompt('请填写退回原因（必填）');
+    if (!reason || !reason.trim()) return;
+    try {
+      const res: any = await returnTaskByAssignApi(record.taskId ?? record.id, reason.trim());
+      if (res?.code === 200) {
+        message.success('已退回');
+        doFetch();
+      } else {
+        message.error(res?.msg || '退回失败');
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.msg || '退回失败');
+    }
+  };
+
+const columns: ColumnsType<TaskAssignItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
     { title: '任务名称', dataIndex: 'taskName', width: 200 },
     { title: '分派部门', dataIndex: 'deptName', width: 180 },
@@ -134,9 +151,12 @@ const TaskAssignPage: React.FC = () => {
     {
       title: '操作', key: 'action', width: 100, fixed: 'right',
       render: (_: any, record: TaskAssignItem) => (
-        <Popconfirm title="确定取消分派?" onConfirm={() => handleCancelAssign(record.id)} okText="确定" cancelText="取消">
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}>取消</Button>
-        </Popconfirm>
+        <Space>
+          <Popconfirm title="确定取消分派?" onConfirm={() => handleCancelAssign(record.id)} okText="确定" cancelText="取消">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>取消</Button>
+          </Popconfirm>
+          <Button type="link" size="small" onClick={() => handleReturn(record)}>退回</Button>
+        </Space>
       ),
     },
   ];

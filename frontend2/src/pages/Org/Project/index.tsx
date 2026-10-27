@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { publishProjectApi } from '@/services/api';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Tree, TreeSelect, Select, message, Popconfirm, App,
 } from 'antd';
@@ -23,7 +24,22 @@ const ProjectPage: React.FC = () => {
     fetchTree();
   }, [fetchTree]);
 
-  useEffect(() => {
+    const handlePublish = async () => {
+    if (!selectedProject) return;
+    try {
+      const res: any = await publishProjectApi(selectedProject.id);
+      if (res?.code === 200) {
+        message.success('项目已发布');
+        doFetch();
+      } else {
+        message.error(res?.msg || '发布失败');
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.msg || '发布失败');
+    }
+  };
+
+useEffect(() => {
     doFetch();
   }, [doFetch]);
 
@@ -216,6 +232,7 @@ const ProjectPage: React.FC = () => {
             <Popconfirm title="确定删除?" onConfirm={handleDelete} okText="确定" cancelText="取消">
               <Button danger icon={<DeleteOutlined />} disabled={!selectedProject}>删除</Button>
             </Popconfirm>
+            <Button onClick={handlePublish} disabled={!selectedProject}>发布</Button>
             <Button icon={<ReloadOutlined />} onClick={doFetch}>刷新</Button>
           </Space>
         </div>

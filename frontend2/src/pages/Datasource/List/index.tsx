@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useDatasourceStore } from '@/stores/useDatasourceStore';
+import { testDatasourceConnectionApi } from '@/services/api';
 import type { DatasourceItem, DatasourceFormParams } from '@/services/api';
 import dayjs from 'dayjs';
 
@@ -119,7 +120,18 @@ const DatasourceListPage: React.FC = () => {
     sqlserver: { color: 'purple', text: 'SQL Server' },
   };
 
-  const columns: ColumnsType<DatasourceItem> = [
+    const handleTest = async (record: any) => {
+    try {
+      const res: any = await testDatasourceConnectionApi(record as any);
+      const ok = res?.data?.success ?? res?.data?.ok ?? res?.code === 200;
+      if (ok) message.success(res?.data?.message || '连接成功');
+      else message.error(res?.data?.message || res?.msg || '连接失败');
+    } catch (e: any) {
+      message.error(e?.response?.data?.msg || '连接失败');
+    }
+  };
+
+const columns: ColumnsType<DatasourceItem> = [
     { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
     { title: '名称', dataIndex: 'dsName', width: 160 },
     {
@@ -143,7 +155,8 @@ const DatasourceListPage: React.FC = () => {
       title: '操作', key: 'action', width: 200, fixed: 'right',
       render: (_: any, record: DatasourceItem) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="link" size="small" onClick={() => handleTest(record)}>连接测试</Button>
+        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
           <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
