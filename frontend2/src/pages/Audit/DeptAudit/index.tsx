@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import { getQualityApi } from '@/services/api';
 import { useAuditStore } from '@/stores/useAuditStore';
 import TaskSelector from '@/components/TaskSelector';
 import type { AuditDataItem } from '@/services/api';
@@ -46,6 +47,24 @@ const DeptAuditPage: React.FC = () => {
   }, []);
 
   const openAudit = (record: AuditDataItem, isPass: boolean) => {
+    // R-06 质量报告不合格时只允许驳回（后端也会拦截，这里提前给出提示）
+    if (isPass) {
+      getQualityApi(record.id)
+        .then((res: any) => {
+          const cr = res?.data?.record?.check_result ?? res?.data?.record?.checkResult;
+          if (String(cr || '').toUpperCase() === 'FAIL') {
+            msg.error('质量报告结论为不合格，只能驳回');
+            return;
+          }
+          openAuditModal(record, isPass);
+        })
+        .catch(() => openAuditModal(record, isPass));
+      return;
+    }
+    openAuditModal(record, isPass);
+  };
+
+  const openAuditModal = (record: AuditDataItem, isPass: boolean) => {
     setCurrent(record);
     setPass(isPass);
     form.resetFields();
