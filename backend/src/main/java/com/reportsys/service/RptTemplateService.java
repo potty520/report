@@ -28,6 +28,8 @@ public class RptTemplateService {
     @Autowired
     private RptTemplateMapper rptTemplateMapper;
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @Autowired
     private RptTemplateFieldMapper rptTemplateFieldMapper;
     @Autowired
     private SysDeptMapper sysDeptMapper;
@@ -115,6 +117,19 @@ public class RptTemplateService {
         template.setMaterializedTime(null);
         template.setUpdateTime(LocalDateTime.now());
         rptTemplateMapper.updateById(template);
+    }
+
+    /** 模板审核结果通知（原版「模板定义通知」：审核通过后才通知） */
+    private void notifyTemplateAudit(RptTemplate template, Integer auditStatus) {
+        if (template.getCreateBy() == null) return;
+        String title = auditStatus != null && auditStatus == 1 ? "模板审核通过" : "模板审核未通过";
+        String content = "模板「" + template.getTemplateName() + "」" +
+                (auditStatus != null && auditStatus == 1 ? "已审核通过，可用于制定任务" : "未通过审核，请修改后重新提交");
+        try {
+            jdbcTemplate.update("INSERT INTO sys_message (user_id, title, content, msg_type, read_flag, create_time) "
+                    + "VALUES (?,?,?,'SYSTEM',0,NOW())", template.getCreateBy(), title, content);
+        } catch (Exception ignored) {
+        }
     }
 
     /**
@@ -348,6 +363,7 @@ public class RptTemplateService {
         }
         template.setUpdateTime(LocalDateTime.now());
         rptTemplateMapper.updateById(template);
+        notifyTemplateAudit(template, auditStatus);
     }
 
     /**
