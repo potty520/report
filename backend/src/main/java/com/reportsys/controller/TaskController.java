@@ -20,7 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/task")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','TASK_MAKER','TASK_ASSIGNER')")
 public class TaskController {
 
     @Autowired
