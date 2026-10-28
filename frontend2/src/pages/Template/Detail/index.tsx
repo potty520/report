@@ -4,7 +4,8 @@ import {
   Card, Descriptions, Tag, Button, Space, Table, Modal, Form, Input, Select, Radio, message, App, Spin, Row, Col,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
-import { getDisplayConfigApi, saveDisplayConfigApi, displayLinkTestApi } from '@/services/api';
+import { getDisplayConfigApi, saveDisplayConfigApi, displayLinkTestApi,
+  getDatasourceTablesApi, getDatasourceColumnsApi, bindTemplateColumnsApi } from '@/services/api';
 import { useTemplateStore } from '@/stores/useTemplateStore';
 import type { TemplateField } from '@/services/api';
 import dayjs from 'dayjs';
@@ -18,6 +19,48 @@ const TemplateDetailPage: React.FC = () => {
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [auditAction, setAuditAction] = useState<number>(1); // 1=pass, 2=reject
   const [auditForm] = Form.useForm();
+  const [bindDsId, setBindDsId] = useState<string>('');
+  const [bindTables, setBindTables] = useState<string[]>([]);
+  const [bindTable, setBindTable] = useState<string>('');
+  const [bindColumns, setBindColumns] = useState<any[]>([]);
+  const [mapping, setMapping] = useState<Record<number, string>>({});
+
+  const loadTables = async () => {
+    if (!bindDsId) { message.warning('请先填写数据源 ID'); return; }
+    try {
+      const res: any = await getDatasourceTablesApi(Number(bindDsId));
+      setBindTables(res?.data || []);
+      message.success(`已加载 ${(res?.data || []).length} 张表`);
+    } catch { message.error('加载表清单失败'); }
+  };
+
+  const loadColumns = async (table: string) => {
+    if (!bindDsId || !table) return;
+    try {
+      const res: any = await getDatasourceColumnsApi(Number(bindDsId), table);
+      const cols = res?.data || [];
+      setBindColumns(cols);
+      const auto: Record<number, string> = {};
+      for (const f of ((currentItem?.fields) || [])) {
+        const hit = cols.find((c: any) =>
+          String(c.name).toLowerCase() === String(f.fieldCode || f.fieldName || '').toLowerCase());
+        if (hit) auto[f.id as number] = hit.name;
+      }
+      setMapping(auto);
+      message.success(`已加载 ${cols.length} 列，自动匹配 ${Object.keys(auto).length} 个字段`);
+    } catch { message.error('加载列清单失败'); }
+  };
+
+  const saveBinding = async () => {
+    const binds = Object.keys(mapping).map((fid) => ({ fieldId: Number(fid), dbColumn: mapping[Number(fid)] }));
+    if (!binds.length) { message.warning('请先完成字段映射'); return; }
+    try {
+      const res: any = await bindTemplateColumnsApi(Number(id), binds);
+      if (res?.code === 200) message.success('字段绑定已保存');
+      else message.error(res?.msg || '保存失败');
+    } catch (e: any) { message.error(e?.response?.data?.msg || '保存失败'); }
+  };
+
   const [displayType, setDisplayType] = useState<number>(0);
   const [refTemplateId, setRefTemplateId] = useState<string>('');
   const [refDsId, setRefDsId] = useState<string>('');
@@ -185,6 +228,48 @@ const TemplateDetailPage: React.FC = () => {
               <span style={{ color: '#999', fontSize: 12 }}>
                 选择「关联模板」或「关联表」后，填报页会把参考数据只读展示给填报人。
               </span>
+            </Space>
+          </Card>
+
+          <Card title="关联已有表（字段映射）" style={{ marginTop: 16 }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Space>
+                <Input placeholder="数据源 ID" style={{ width: 140 }} value={bindDsId}
+                  onChange={(e) => setBindDsId(e.target.value)} />
+                <Button onClick={loadTables}>加载表</Button>
+                <Select placeholder="选择表" style={{ width: 240 }} value={bindTable || undefined}
+                  onChange={(v) => { setBindTable(v); loadColumns(v); }}
+                  options={bindTables.map((x) => ({ label: x, value: x }))} />
+              </Space>
+              <Table
+                size="small"
+                rowKey={(r: any) => String(r.id)}
+                pagination={false}
+                dataSource={(currentItem?.fields) || []}
+                columns={[
+                  { title: '模板字段', dataIndex: 'fieldName' },
+                  { title: '字段编码', dataIndex: 'fieldCode', width: 140 },
+                  {
+                    title: '数据库列', width: 240,
+                    render: (_: any, r: any) => (
+                      <Select
+                        style={{ width: '100%' }}
+                        placeholder="选择列"
+                        value={mapping[r.id] || undefined}
+                        showSearch
+                        onChange={(v) => setMapping((prev) => ({ ...prev, [r.id]: v }))}
+                        options={bindColumns.map((c: any) => ({ label: `${c.name} (${c.type})`, value: c.name }))}
+                      />
+                    ),
+                  },
+                ]}
+              />
+              <Space>
+                <Button type="primary" onClick={saveBinding}>保存映射</Button>
+                <span style={{ color: '#999', fontSize: 12 }}>
+                  选择「关联已有表」后不再执行建表；存在未映射字段时后端会拒绝保存。
+                </span>
+              </Space>
             </Space>
           </Card>
         </Col>

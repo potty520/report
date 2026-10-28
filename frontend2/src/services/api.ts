@@ -1747,3 +1747,16 @@ export async function saveDisplayConfigApi(templateId: number, data: Record<stri
 export async function displayLinkTestApi(datasourceId: number, tableName: string) {
   return request.post<ApiResponse<Record<string, any>>>('/template/display/link-test', { datasourceId, tableName });
 }
+
+// ==================== 关联已有表（R-08）====================
+export async function getDatasourceTablesApi(datasourceId: number) {
+  return request.get<ApiResponse<string[]>>(`/datasource/${datasourceId}/tables`);
+}
+
+export async function getDatasourceColumnsApi(datasourceId: number, table: string) {
+  return request.get<ApiResponse<Record<string, any>[]>>(`/datasource/${datasourceId}/tables/${encodeURIComponent(table)}/columns`);
+}
+
+export async function bindTemplateColumnsApi(templateId: number, binds: Record<string, any>[]) {
+  return request.post<ApiResponse<void>>(`/template/${templateId}/bind-columns`, binds);
+}
