@@ -28,7 +28,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/template")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','TEMPLATE_AUDITOR')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DEPT_ADMIN','TEMPLATE_AUDITOR','TASK_MAKER')")
 public class TemplateController {
 
     @Autowired

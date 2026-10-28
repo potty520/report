@@ -8,7 +8,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useFillStore } from '@/stores/useFillStore';
 import { getTemplateFieldsApi, uploadFillFileApi, getMyAssignedTasksApi,
-  noUpdateSubmitApi, returnFillTaskApi, getTaskReferenceApi } from '@/services/api';
+  noUpdateSubmitApi, returnFillTaskApi, getTaskReferenceApi, verifyFillApi } from '@/services/api';
 import type { FillTaskItem, TemplateField, AssignedTaskItem } from '@/services/api';
 import dayjs from 'dayjs';
 
@@ -63,6 +63,7 @@ const FillTaskPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [fillForm] = Form.useForm();
   const [refData, setRefData] = useState<any>(null);
+  const [verifyErrors, setVerifyErrors] = useState<any[]>([]);
   const hasAttachField = (templateFields as any[]).some((f) => Number(f?.fieldKind) === 1);
   const [submitting, setSubmitting] = useState(false);
   // 已分派但还没有填报记录的任务（用于补全「首次填报」入口）
@@ -211,6 +212,30 @@ const FillTaskPage: React.FC = () => {
           msg.error('该任务没有可填写的模板字段');
           return;
         }
+      }
+      if (type === 'submit') {
+        try {
+          const vr: any = await verifyFillApi(currentTaskId, [payload]);
+          const errs = [...((vr?.data?.stage1?.errors) || []), ...((vr?.data?.stage2?.errors) || [])];
+          if (!vr?.data?.passed && errs.length) {
+            setVerifyErrors(errs);
+            Modal.error({
+              title: '数据校验未通过',
+              width: 640,
+              content: (
+                <div>
+                  <p>以下问题需要先修正，修正后才能提交：</p>
+                  <ul style={{ paddingLeft: 18 }}>
+                    {errs.slice(0, 20).map((e: any, i: number) => (
+                      <li key={i}>第 {e.row} 行 · {e.column}：{e.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+            });
+            return;
+          }
+        } catch { /* 校验接口异常不阻断 */ }
       }
       const data = {
         taskId: currentTaskId,

@@ -1760,3 +1760,8 @@ export async function getDatasourceColumnsApi(datasourceId: number, table: strin
 export async function bindTemplateColumnsApi(templateId: number, binds: Record<string, any>[]) {
   return request.post<ApiResponse<void>>(`/template/${templateId}/bind-columns`, binds);
 }
+
+// ==================== 报表核验 / 导入预校验（R-09）====================
+export async function verifyFillApi(taskId: number, rows: Record<string, any>[]) {
+  return request.post<ApiResponse<Record<string, any>>>('/fill/' + taskId + '/verify', { rows });
+}

@@ -51,7 +51,7 @@ public class TaskController {
     /**
      * 制定任务
      */
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','TASK_MAKER')")
     @PostMapping
     public Result<Void> create(@RequestBody RptTask task) {
         try {
@@ -71,7 +71,7 @@ public class TaskController {
     /**
      * 更新任务
      */
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','TASK_MAKER')")
     @PutMapping
     public Result<Void> update(@RequestBody RptTask task) {
         try {
