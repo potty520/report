@@ -63,6 +63,7 @@ const FillTaskPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [fillForm] = Form.useForm();
   const [refData, setRefData] = useState<any>(null);
+  const hasAttachField = (templateFields as any[]).some((f) => Number(f?.fieldKind) === 1);
   const [submitting, setSubmitting] = useState(false);
   // 已分派但还没有填报记录的任务（用于补全「首次填报」入口）
   const [assignedTasks, setAssignedTasks] = useState<AssignedTaskItem[]>([]);
@@ -380,6 +381,19 @@ const FillTaskPage: React.FC = () => {
               }}
             >
               <Button icon={<UploadOutlined />} loading={uploading}>上传附件</Button>
+            </Upload>
+          )}
+          {!readOnly && hasAttachField && (
+            <Upload
+              accept=".zip,.rar"
+              maxCount={1}
+              showUploadList={false}
+              beforeUpload={(file) => {
+                handleUploadFile(file as unknown as File);
+                return false;
+              }}
+            >
+              <Button icon={<UploadOutlined />} loading={uploading}>非分卷上传附件</Button>
             </Upload>
           )}
           {fileName ? (
