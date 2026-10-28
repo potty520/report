@@ -63,6 +63,25 @@ public class ReportRankService {
                         + "GROUP BY a.dept_id, d.dept_name ORDER BY issued DESC LIMIT 20");
     }
 
+    /** 补正次数统计：按任务统计补正单数量与状态分布 */
+    public Map<String, Object> correctStats(Long taskId) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("total", count("SELECT COUNT(*) FROM rpt_correct_task WHERE (? IS NULL OR task_id = ?)", taskId, taskId));
+        m.put("ongoing", count("SELECT COUNT(*) FROM rpt_correct_task WHERE status = 1 AND (? IS NULL OR task_id = ?)", taskId, taskId));
+        m.put("finished", count("SELECT COUNT(*) FROM rpt_correct_task WHERE status = 2 AND (? IS NULL OR task_id = ?)", taskId, taskId));
+        return m;
+    }
+
+    /** 任务分派统计：按任务统计分派人数、已填报、待填报 */
+    public List<Map<String, Object>> assignStats(Long taskId) {
+        return jdbc.queryForList(
+                "SELECT t.id AS taskId, t.task_name AS taskName, "
+                        + "(SELECT COUNT(*) FROM rpt_task_assign a WHERE a.task_id = t.id AND a.assign_type = 'FILL') AS assignCount, "
+                        + "(SELECT COUNT(DISTINCT d.fill_user_id) FROM rpt_task_data d WHERE d.task_id = t.id AND d.status = 1) AS filledCount, "
+                        + "t.status AS status "
+                        + "FROM rpt_task t WHERE (? IS NULL OR t.id = ?) ORDER BY t.id DESC LIMIT 100", taskId, taskId);
+    }
+
     private long count(String sql, Object... args) {
         Long v = jdbc.queryForObject(sql, Long.class, args);
         return v == null ? 0 : v;
