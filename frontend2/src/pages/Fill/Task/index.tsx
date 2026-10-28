@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  Table, Button, Space, Tag, Modal, Form, Input, Upload, Alert, Typography, message, App,
+  Table, Button, Space, Tag, Modal, Form, Input, Upload, Alert, Typography, message, App, Card,
 } from 'antd';
 import {
   UploadOutlined, EditOutlined, SendOutlined, PaperClipOutlined, PlusOutlined, DeleteOutlined,
@@ -8,7 +8,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useFillStore } from '@/stores/useFillStore';
 import { getTemplateFieldsApi, uploadFillFileApi, getMyAssignedTasksApi,
-  noUpdateSubmitApi, returnFillTaskApi } from '@/services/api';
+  noUpdateSubmitApi, returnFillTaskApi, getTaskReferenceApi } from '@/services/api';
 import type { FillTaskItem, TemplateField, AssignedTaskItem } from '@/services/api';
 import dayjs from 'dayjs';
 
@@ -62,6 +62,7 @@ const FillTaskPage: React.FC = () => {
   const [fileName, setFileName] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const [fillForm] = Form.useForm();
+  const [refData, setRefData] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   // 已分派但还没有填报记录的任务（用于补全「首次填报」入口）
   const [assignedTasks, setAssignedTasks] = useState<AssignedTaskItem[]>([]);
@@ -116,6 +117,8 @@ const FillTaskPage: React.FC = () => {
     setTemplateFields([]);
     setManualRows([]);
     setManualMode(false);
+    setRefData(null);
+    getTaskReferenceApi(record.taskId).then((res: any) => setRefData(res?.data || null)).catch(() => setRefData(null));
     fillForm.resetFields();
     setFillModalOpen(true);
     setFieldsLoading(true);
@@ -346,6 +349,25 @@ const FillTaskPage: React.FC = () => {
         ]}
         destroyOnClose
       >
+        {refData && refData.configType ? (
+          <Card size="small" title="参考数据（只读）" style={{ marginBottom: 16 }}>
+            <div style={{ color: '#999', fontSize: 12, marginBottom: 8 }}>
+              {refData.configType === 1 ? '关联模板' : '关联表'}：以下为系统带出的历史数据，仅供填报参考，不会写入本次提交。
+            </div>
+            <Table
+              size="small"
+              rowKey={(_, i) => String(i)}
+              pagination={{ pageSize: 5, size: 'small' }}
+              dataSource={(refData.rows || []) as any[]}
+              columns={
+                (refData.rows && refData.rows.length
+                  ? Object.keys(refData.rows[0] as any).map((k) => ({ title: k, dataIndex: k, ellipsis: true }))
+                  : [])
+              }
+              locale={{ emptyText: '暂无参考数据' }}
+            />
+          </Card>
+        ) : null}
         <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {!readOnly && (
             <Upload
