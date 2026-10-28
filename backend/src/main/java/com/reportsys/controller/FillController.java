@@ -8,6 +8,7 @@ import com.reportsys.service.FillActionService;
 import com.reportsys.service.TaskReturnService;
 import com.reportsys.service.TemplateDisplayService;
 import com.reportsys.service.ImportCheckService;
+import com.reportsys.service.ImportVerifyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -40,6 +41,8 @@ public class FillController {
     private TemplateDisplayService templateDisplayService;
     @Autowired
     private ImportCheckService importCheckService;
+    @Autowired
+    private ImportVerifyService importVerifyService;
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     @Autowired
@@ -344,6 +347,20 @@ public class FillController {
     public Result<Map<String, Object>> importChecks(@PathVariable Long taskId) {
         try {
             return Result.success(importCheckService.list(taskId));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+
+    /** R-09 报表核验 + 导入预校验（返回逐行错误明细） */
+    @PostMapping("/{taskId}/verify")
+    public Result<Map<String, Object>> verify(@PathVariable Long taskId,
+                                              @RequestBody Map<String, Object> body) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) body.getOrDefault("rows", java.util.Collections.emptyList());
+            return Result.success(importVerifyService.verify(taskId, rows, getCurrentUserId()));
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());
         }
