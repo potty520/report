@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Tag, Button, Space, Table, Modal, Form, Input, Select, message, App, Spin, Row, Col,
+  Card, Descriptions, Tag, Button, Space, Table, Modal, Form, Input, Select, Radio, message, App, Spin, Row, Col,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { getDisplayConfigApi, saveDisplayConfigApi, displayLinkTestApi } from '@/services/api';
 import { useTemplateStore } from '@/stores/useTemplateStore';
 import type { TemplateField } from '@/services/api';
 import dayjs from 'dayjs';
@@ -17,6 +18,47 @@ const TemplateDetailPage: React.FC = () => {
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [auditAction, setAuditAction] = useState<number>(1); // 1=pass, 2=reject
   const [auditForm] = Form.useForm();
+  const [displayType, setDisplayType] = useState<number>(0);
+  const [refTemplateId, setRefTemplateId] = useState<string>('');
+  const [refDsId, setRefDsId] = useState<string>('');
+  const [refTable, setRefTable] = useState<string>('');
+
+  const loadDisplay = useCallback(() => {
+    if (!id) return;
+    getDisplayConfigApi(Number(id)).then((res: any) => {
+      const d = res?.data || {};
+      setDisplayType(d.configType ?? 0);
+      setRefTemplateId(d.refTemplateId ? String(d.refTemplateId) : '');
+      setRefDsId(d.refDatasourceId ? String(d.refDatasourceId) : '');
+      setRefTable(d.refTableName || '');
+    }).catch(() => {});
+  }, [id]);
+
+  useEffect(() => { loadDisplay(); }, [loadDisplay]);
+
+  const handleSaveDisplay = async () => {
+    try {
+      const res: any = await saveDisplayConfigApi(Number(id), {
+        configType: displayType,
+        refTemplateId: displayType === 1 && refTemplateId ? Number(refTemplateId) : null,
+        refDatasourceId: displayType === 2 && refDsId ? Number(refDsId) : null,
+        refTableName: displayType === 2 ? refTable : null,
+        refColumns: '[]',
+      });
+      if (res?.code === 200) message.success('展示配置已保存');
+      else message.error(res?.msg || '保存失败');
+    } catch { message.error('保存失败'); }
+  };
+
+  const handleLinkTest = async () => {
+    if (!refDsId || !refTable) { message.warning('请先填写数据源 ID 与表名'); return; }
+    try {
+      const res: any = await displayLinkTestApi(Number(refDsId), refTable);
+      if (res?.data?.ok) message.success(res.data.message || '链接成功');
+      else message.error(res?.data?.message || '链接失败');
+    } catch { message.error('链接检测失败'); }
+  };
+
 
   useEffect(() => {
     if (id) {
@@ -118,6 +160,32 @@ const TemplateDetailPage: React.FC = () => {
               pagination={false}
               size="small"
             />
+          </Card>
+
+          <Card title="展示信息配置" style={{ marginTop: 16 }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Radio.Group value={displayType} onChange={(e) => setDisplayType(e.target.value)}>
+                <Radio value={0}>无</Radio>
+                <Radio value={1}>关联模板</Radio>
+                <Radio value={2}>关联表</Radio>
+              </Radio.Group>
+              {displayType === 1 && (
+                <Input placeholder="关联模板 ID" value={refTemplateId} onChange={(e) => setRefTemplateId(e.target.value)} />
+              )}
+              {displayType === 2 && (
+                <>
+                  <Input placeholder="数据源 ID" value={refDsId} onChange={(e) => setRefDsId(e.target.value)} />
+                  <Input placeholder="表名" value={refTable} onChange={(e) => setRefTable(e.target.value)} />
+                </>
+              )}
+              <Space>
+                <Button onClick={handleLinkTest} disabled={displayType !== 2}>链接检测</Button>
+                <Button type="primary" onClick={handleSaveDisplay}>保存配置</Button>
+              </Space>
+              <span style={{ color: '#999', fontSize: 12 }}>
+                选择「关联模板」或「关联表」后，填报页会把参考数据只读展示给填报人。
+              </span>
+            </Space>
           </Card>
         </Col>
 

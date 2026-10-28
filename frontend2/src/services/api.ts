@@ -1734,3 +1734,16 @@ export async function addCorrectItemApi(correctId: number, data: Record<string, 
 export async function deleteCorrectItemApi(itemId: number) {
   return request.delete<ApiResponse<void>>(`/correct/item/${itemId}`);
 }
+
+// ==================== 模板展示信息配置（R-01）====================
+export async function getDisplayConfigApi(templateId: number) {
+  return request.get<ApiResponse<Record<string, any>>>(`/template/${templateId}/display-config`);
+}
+
+export async function saveDisplayConfigApi(templateId: number, data: Record<string, any>) {
+  return request.post<ApiResponse<void>>(`/template/${templateId}/display-config`, data);
+}
+
+export async function displayLinkTestApi(datasourceId: number, tableName: string) {
+  return request.post<ApiResponse<Record<string, any>>>('/template/display/link-test', { datasourceId, tableName });
+}
