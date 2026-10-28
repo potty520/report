@@ -160,7 +160,10 @@ public final class DialectSupport {
             if (StrUtil.isBlank(column)) continue;
             if (!first) sb.append(", ");
             first = false;
-            sb.append(quote(dialect, column)).append(" ").append(columnType(dialect, field.getFieldType(), field.getFieldLength()));
+            sb.append(quote(dialect, column)).append(" ").append(
+                    (field.getFieldKind() != null && field.getFieldKind() == 1)
+                            ? (dialect == Dialect.ORACLE ? "VARCHAR2(255)" : "VARCHAR(255)")
+                            : columnType(dialect, field.getFieldType(), field.getFieldLength()));
             if (field.getIsKey() != null && field.getIsKey() == 1) keys.add(quote(dialect, column));
             if (field.getIsRequired() != null && field.getIsRequired() == 1 && dialect == Dialect.ORACLE) {
                 sb.append(" NOT NULL");

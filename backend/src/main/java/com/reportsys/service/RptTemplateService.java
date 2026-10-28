@@ -251,6 +251,11 @@ public class RptTemplateService {
                 if (!codes.add(code.trim().toLowerCase())) {
                     throw new RuntimeException("字段编码重复：" + code + "（字段编码必须唯一）");
                 }
+                // R-07 附件字段：类型锁定为 VARCHAR(255)，长度不可改
+                if (field.getFieldKind() != null && field.getFieldKind() == 1) {
+                    field.setFieldType("VARCHAR");
+                    field.setFieldLength(255);
+                }
                 field.setTemplateId(template.getId());
                 field.setSort(sort++);
                 rptTemplateFieldMapper.insert(field);
@@ -289,6 +294,10 @@ public class RptTemplateService {
                 field.setId(null);
                 field.setTemplateId(template.getId());
                 field.setSort(sort++);
+                if (field.getFieldKind() != null && field.getFieldKind() == 1) {
+                    field.setFieldType("VARCHAR");
+                    field.setFieldLength(255);
+                }
                 rptTemplateFieldMapper.insert(field);
             }
         }
