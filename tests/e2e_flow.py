@@ -24,7 +24,7 @@ def login(u, p):
 
 
 admin = login("admin", os.environ.get("REPORT_ADMIN_PWD", "Admin@2026"))
-user = login("user", os.environ.get("REPORT_USER_PWD", "User@2026"))
+user = login(os.environ.get("REPORT_FILL_USER", "user"), os.environ.get("REPORT_USER_PWD", "User@2026"))
 stamp = str(int(time.time()))[-6:]
 
 # 1) 建模板（含必填数值字段 + 备注）
