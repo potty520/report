@@ -40,8 +40,8 @@ def call(method, path, token=None, params=None, data=None, json_body=None, timeo
 
 def main():
     stamp = time.strftime("%H%M%S")
-    admin = login("admin", "Admin@2026")
-    user = login("user", "User@2026")
+    admin = login("admin", os.environ.get("REPORT_ADMIN_PWD", "Admin@2026"))
+    user = login("user", os.environ.get("REPORT_USER_PWD", "User@2026"))
     check("登录 admin/user", True)
 
     # ---------- 0. 数据源 ----------

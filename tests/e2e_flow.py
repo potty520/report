@@ -1,3 +1,4 @@
+import os
 # -*- coding: utf-8 -*-
 """端到端业务闭环：建模板 → 物化 → 审核启用 → 建任务 → 分派 → 填报(校验拦截) → 两级审核 → 入库 → 校验目标表。"""
 import json
@@ -22,8 +23,8 @@ def login(u, p):
     return {"Authorization": "Bearer " + r["data"]["token"]}
 
 
-admin = login("admin", "Admin@2026")
-user = login("user", "User@2026")
+admin = login("admin", os.environ.get("REPORT_ADMIN_PWD", "Admin@2026"))
+user = login("user", os.environ.get("REPORT_USER_PWD", "User@2026"))
 stamp = str(int(time.time()))[-6:]
 
 # 1) 建模板（含必填数值字段 + 备注）

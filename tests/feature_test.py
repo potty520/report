@@ -1,3 +1,4 @@
+import os
 # -*- coding: utf-8 -*-
 """补齐功能验收：R-01 ~ R-15 在 v2 实例上的实际行为。"""
 import json
@@ -22,8 +23,8 @@ def login(u, p):
     return {"Authorization": "Bearer " + r["data"]["token"]}
 
 
-admin = login("admin", "Admin@2026")
-user = login("user", "User@2026")
+admin = login("admin", os.environ.get("REPORT_ADMIN_PWD", "Admin@2026"))
+user = login("user", os.environ.get("REPORT_USER_PWD", "User@2026"))
 
 # 基础数据
 tpl = requests.get(BASE + "/template/page", headers=admin, params={"page": 1, "pageSize": 1}, timeout=20).json()
